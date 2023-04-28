@@ -82,6 +82,7 @@ XYCell numSquareToXYCell(int squarex, int squarey)
 #pragma region 常量
 const int myGridPerSquare = 100;
 const int myRow = Constants::rows * numOfGridPerCell / myGridPerSquare;
+const int myCol = Constants::cols * numOfGridPerCell / myGridPerSquare;  // NEW CONSTANT ADDED
 #define framet Constants::frameDuration
 #pragma endregion
 
@@ -107,21 +108,73 @@ THUAI6::PlaceType CellPlaceType(XYCell cell)
 {
 }
 
-void Initializate(const IStudentAPI& api) {
-    if (firstTime)return;
+void Initialize(const IStudentAPI& api)
+{
+    if (firstTime)
+        return;
     firstTime = true;
     oriMap = api.GetFullMap();
-        //    for i in range(myRowAndCol) :
-        //       for j in range(myRowAndCol) :
-        // speedOriMap[i][j] =
-        //find ClassroomSquare
+    myOriVelocity = api.GetSelfInfo()->speed;
+    int i = 0, j = 0;
+    for (i = 0; i < Constants::rows; ++i)
+    {
+        for (j = 0; j < Constants::cols; ++j)
+        {
+            switch (oriMap[i][j])
+            {
+                case THUAI6::PlaceType::Wall:
+                case THUAI6::PlaceType::NullPlaceType:
+                case THUAI6::PlaceType::Chest:
+                case THUAI6::PlaceType::ClassRoom:
+                    speedOriMap[i][j] = 0;
+                    break;
+                case THUAI6::PlaceType::Land:
+                case THUAI6::PlaceType::Grass:
+                    speedOriMap[i][j] = myOriVelocity;
+                    break;
+                case THUAI6::PlaceType::Window:  // Cases with windows differ with player type and is non-linear with myOriVelocity
+                    switch (api.GetSelfInfo()->studentType)
+                    {
+                        case THUAI6::StudentType::Athlete:
+                            speedOriMap[i][j] = Constants::Athlete::moveSpeed;
+                            break;
+                        case THUAI6::StudentType::Teacher:
+                            speedOriMap[i][j] = Constants::Teacher::moveSpeed;
+                            break;
+                        case THUAI6::StudentType::StraightAStudent:
+                            speedOriMap[i][j] = Constants::StraightAStudent::moveSpeed;
+                            break;
+                        case THUAI6::StudentType::Sunshine:
+                            speedOriMap[i][j] = Constants::Sunshine::moveSpeed;
+                            break;
+                        default:
+                            speedOriMap[i][j] = 0;
+                            break;
+                    }
+                default:
+                    break;
+            }
+        }
+    }
+    // speedOriMap[i][j] =
+    // find ClassroomCell
 }
+
 void drawMap()
 {
     for (int i=0;i<myRow;++i)
         for (int j=0;j<myRow;++j)
         {
-            if ()
+            switch (CellPlaceType(numSquareToXYCell(i,j)))
+            {
+                case THUAI6::PlaceType::Wall :
+                case THUAI6::PlaceType::ClassRoom:
+                case THUAI6::PlaceType::Gate:
+                case THUAI6::PlaceType::Chest:
+                    untilTimeMap[i][j] = -1;
+                    break;
+                case THUAI6::PlaceType::
+            }
         }
 }
 
