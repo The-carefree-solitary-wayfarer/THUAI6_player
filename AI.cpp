@@ -4,10 +4,10 @@
 #include "AI.h"
 #include "constants.h"
 
-// ä¸ºå‡åˆ™play()æœŸé—´ç¡®ä¿æ¸¸æˆçŠ¶æ€ä¸æ›´æ–°ï¼Œä¸ºçœŸåˆ™åªä¿è¯æ¸¸æˆçŠ¶æ€åœ¨è°ƒç”¨ç›¸å…³æ–¹æ³•æ—¶ä¸æ›´æ–°
+// Îª¼ÙÔòplay()ÆÚ¼äÈ·±£ÓÎÏ·×´Ì¬²»¸üĞÂ£¬ÎªÕæÔòÖ»±£Ö¤ÓÎÏ·×´Ì¬ÔÚµ÷ÓÃÏà¹Ø·½·¨Ê±²»¸üĞÂ
 extern const bool asynchronous = false;
 
-// é€‰æ‰‹éœ€è¦ä¾æ¬¡å°†player0åˆ°player4çš„èŒä¸šåœ¨è¿™é‡Œå®šä¹‰
+// Ñ¡ÊÖĞèÒªÒÀ´Î½«player0µ½player4µÄÖ°ÒµÔÚÕâÀï¶¨Òå
 
 extern const std::array<THUAI6::StudentType, 4> studentType = {
     THUAI6::StudentType::Athlete,
@@ -17,31 +17,31 @@ extern const std::array<THUAI6::StudentType, 4> studentType = {
 
 extern const THUAI6::TrickerType trickerType = THUAI6::TrickerType::Assassin;
 
-// å¯ä»¥åœ¨AI.cppå†…éƒ¨å£°æ˜å˜é‡ä¸å‡½æ•°
+// ¿ÉÒÔÔÚAI.cppÄÚ²¿ÉùÃ÷±äÁ¿Óëº¯?
 
-#pragma region è‡ªå®šä¹‰è¾…åŠ©
-class XY {
+#pragma region ×Ô¶¨Òå¸¨?
+class XY
+{
 public:
-    int x,y;
-    XY(int xx,int yy):x(xx),y(yy){}
+    int x, y;
+    XY(int xx, int yy) : x(xx), y(yy) {}
     XY() { x = y = 0; }
 };
 
-class XYSquare :public XY {
+class XYSquare : public XY
+{
 public:
-    XYSquare(int xx, int yy) : XY(xx,yy){}
-    XYSquare():XY(){}
+    XYSquare(int xx, int yy) : XY(xx, yy) {}
+    XYSquare() : XY() {}
 };
 
 class XYGrid : public XY
 {
 public:
-    XYGrid(int xx, int yy) :
-        XY(xx, yy)
+    XYGrid(int xx, int yy) : XY(xx, yy)
     {
     }
-    XYGrid() :
-        XY()
+    XYGrid() : XY()
     {
     }
     XYSquare ToSquare()
@@ -53,21 +53,19 @@ public:
 class XYCell : public XY
 {
 public:
-    XYCell(int xx, int yy) :
-        XY(xx, yy)
+    XYCell(int xx, int yy) : XY(xx, yy)
     {
     }
-    XYCell() :
-        XY()
+    XYCell() : XY()
     {
     }
 };
-int numGridToSquare(int grid)  // Converting no. of grids in a given row to its corresponding square number
+int numGridToSquare(int grid) // Converting no. of grids in a given row to its corresponding square number
 {
     return grid / myGridPerSquare;
 }
 
-XYSquare numGridToXYSquare(int gridx, int gridy)  // Converting grid coordinates row to its corresponding square instance
+XYSquare numGridToXYSquare(int gridx, int gridy) // Converting grid coordinates row to its corresponding square instance
 {
     return XYSquare(gridx / myGridPerSquare, gridy / myGridPerSquare);
 }
@@ -79,7 +77,7 @@ XYCell numSquareToXYCell(int squarex, int squarey)
 
 #pragma endregion
 
-#pragma region å¸¸é‡
+#pragma region ³£Á¿
 const int myGridPerSquare = 100;
 const int myRow = Constants::rows * numOfGridPerCell / myGridPerSquare;
 #define framet Constants::frameDuration
@@ -93,36 +91,37 @@ int myVelocity;
 
 #pragma region Map
 std::vector<std::vector<THUAI6::PlaceType>> oriMap;
-int speedOriMap[myRow][myRow];//0 Wall
-int untilTimeMap[myRow][myRow];//å¤„ç†é—¨ï¼Œéšè—æ ¡é—¨ç­‰
-int disMap[myRow][myRow];//å®é™…è·ç¦»
+int speedOriMap[myRow][myRow];  // 0 Wall
+int untilTimeMap[myRow][myRow]; // ´¦ÀíÃÅ£¬Òş²ØĞ£ÃÅ?
+int disMap[myRow][myRow];       // Êµ¼Ê¾àÀë
 XYSquare fromMap[myRow][myRow];
 
 XYCell ClassroomCell[Constants::numOfClassroom];
-XYCell OpenedGateCell[2+1];
+XYCell OpenedGateCell[2 + 1];
 #pragma endregion
 
-void Initializate(const IStudentAPI& api) {
-    if (firstTime)return;
+void Initializate(const IStudentAPI &api)
+{
+    if (firstTime)
+        return;
     firstTime = true;
     oriMap = api.GetFullMap();
-        //    for i in range(myRowAndCol) :
-        //       for j in range(myRowAndCol) :
-        // speedOriMap[i][j] =
-        //find ClassroomSquare
+    //    for i in range(myRowAndCol) :
+    //       for j in range(myRowAndCol) :
+    // speedOriMap[i][j] =
+    // find ClassroomSquare
 }
 void drawMap()
 {
-    for (int i=0;i<myRow;++i)
-        for (int j=0;j<myRow;++j)
+    for (int i = 0; i < myRow; ++i)
+        for (int j = 0; j < myRow; ++j)
         {
-
         }
 }
 
 int xq[myRow * myRow << 2], yq[myRow * myRow << 2];
 int v[myRow][myRow];
-inline void SPFAin(int x,int y,int xx,int yy,int vd,int l,int r)
+inline void SPFAin(int x, int y, int xx, int yy, int vd, int l, int r)
 {
     if (untilTimeMap[x][yy] > framet && untilTimeMap[xx][y] > framet)
     {
@@ -140,7 +139,7 @@ inline void SPFAin(int x,int y,int xx,int yy,int vd,int l,int r)
 inline void SPFA()
 {
     memset(disMap, 0x3f, sizeof(disMap));
-    memset(v, 0, sizeof(v));  // èŠ‚ç‚¹æ ‡è®°
+    memset(v, 0, sizeof(v)); // ½Úµã±ê¼Ç
     int l = 0, r = 1;
     disMap[selfSquare.x][selfSquare.y] = disMap[selfSquare.x][selfSquare.y] = 0;
     v[selfSquare.x][selfSquare.y] = 1;
@@ -155,8 +154,8 @@ inline void SPFA()
 
         int xx = x - 1, yy = y - 1;
         int vd;
-        vd = 1 + 1.4142 * myGridPerSquare;  //
-        SPFAin(x, y, xx, yy, vd,l,r);
+        vd = 1 + 1.4142 * myGridPerSquare; //
+        SPFAin(x, y, xx, yy, vd, l, r);
 
         xx += 2;
         SPFAin(x, y, xx, yy, vd, l, r);
@@ -183,56 +182,56 @@ inline void SPFA()
     }
 }
 
-void Move(IAPI& api, XYSquare toMove)
+void Move(IAPI &api, XYSquare toMove)
 {
-    //åŒ…æ‹¬ç¿»çª—
+    // °üÀ¨·­´°
 }
 
 XYSquare FindMoveNext(XYSquare toMove)
 {
- //   return 
+    //   return
 }
 
 XYSquare FindClassroom()
 {
-        //æ²¡ä¿®å®Œï¼Œæœ€è¿‘
+    // Ã»ĞŞÍê£¬×î?
 }
 
 XYSquare FindGate()
 {
-    //éšè—æ ¡é—¨æˆ–æ ¡é—¨
-    //return (0,0)false
+    // Òş²ØĞ£ÃÅ»òĞ£?
+    // return (0,0)false
 }
 
 bool Commandable()
 {
 }
 
-void Update(const IStudentAPI& api)
+void Update(const IStudentAPI &api)
 {
     selfInfoStudent = api.GetSelfInfo();
     selfSquare = numGridToXYSquare(selfInfoStudent->x, selfInfoStudent->y);
-    //myVelocity
-    //OpenedGateCell
+    // myVelocity
+    // OpenedGateCell
 }
 
-void Flee(IStudentAPI& api)
+void Flee(IStudentAPI &api)
 {
 }
 
-bool TryToLearn(IStudentAPI& api)
+bool TryToLearn(IStudentAPI &api)
 {
 }
 
-bool TryToGraduate(IStudentAPI& api)
+bool TryToGraduate(IStudentAPI &api)
 {
 }
 
-bool TryToOpenGate(IStudentAPI& api)
+bool TryToOpenGate(IStudentAPI &api)
 {
 }
 
-void AI::play(IStudentAPI& api)
+void AI::play(IStudentAPI &api)
 {
     Update(api);
     Initializate(api);
@@ -244,36 +243,36 @@ void AI::play(IStudentAPI& api)
             Flee(api);
         else
         {
-             if (!TryToOpenGate(api))
-                {
-                    XYSquare toGateSquare = FindGate();
-                    if (toGateSquare.x != 0)
-                        Move(api, FindMoveNext(toGateSquare));
-                    else if (!TryToLearn(api))
-                        Move(api, FindMoveNext(FindClassroom()));
-                }
+            if (!TryToOpenGate(api))
+            {
+                XYSquare toGateSquare = FindGate();
+                if (toGateSquare.x != 0)
+                    Move(api, FindMoveNext(toGateSquare));
+                else if (!TryToLearn(api))
+                    Move(api, FindMoveNext(FindClassroom()));
+            }
         }
     }
-    // å…¬å…±æ“ä½œ
+    // ¹«¹²²Ù×÷
     if (this->playerID == 0)
     {
-        // ç©å®¶0æ‰§è¡Œæ“ä½œ
+        // Íæ¼Ò0Ö´ĞĞ²Ù×÷
     }
     else if (this->playerID == 1)
     {
-        // ç©å®¶1æ‰§è¡Œæ“ä½œ
+        // Íæ¼Ò1Ö´ĞĞ²Ù×÷
     }
     else if (this->playerID == 2)
     {
-        // ç©å®¶2æ‰§è¡Œæ“ä½œ
+        // Íæ¼Ò2Ö´ĞĞ²Ù×÷
     }
     else if (this->playerID == 3)
     {
-        // ç©å®¶3æ‰§è¡Œæ“ä½œ
+        // Íæ¼Ò3Ö´ĞĞ²Ù×÷
     }
 }
 
-void AI::play(ITrickerAPI& api)
+void AI::play(ITrickerAPI &api)
 {
     auto self = api.GetSelfInfo();
     api.PrintSelfInfo();
