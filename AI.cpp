@@ -7,7 +7,7 @@
 using namespace std;
 
 // 为假则play()期间确保游戏状态不更新，为真则只保证游戏状态在调用相关方法时不更新
-extern const bool asynchronous = false;
+extern const bool asynchronous = true;
 
 // 选手需要依次将player0到player4的职业在这里定义
 
@@ -31,8 +31,11 @@ const int myCol = Constants::cols * numOfGridPerCell / myGridPerSquare;  // NEW 
 
 bool firstTime = false;
 std::shared_ptr<const THUAI6::Student> selfInfoStudent;
+std::shared_ptr<const THUAI6::Tricker> selfInfoTricker;
 std::shared_ptr<const THUAI6::Player> selfInfo;
 std::shared_ptr<const THUAI6::GameInfo> gameInfo;
+std::shared_ptr<const THUAI6::Student> students[4];
+int studentsFrame[4];
 
 int myOriVelocity;
 int myVelocity;
@@ -108,11 +111,15 @@ public:
     }
 };
 
-XYGrid CellToGrid(XYCell xy)
+    XYGrid CellToGrid(XYCell xy)
     {
         return XYGrid(xy.x * numOfGridPerCell + numOfGridPerCell / 2, xy.y * numOfGridPerCell + numOfGridPerCell / 2);
     }
-XYCell XYToCell(XY xy)
+    XYCell numGridToXYCell(int x, int y)
+    {
+        return XYCell(x / numOfGridPerCell, y / numOfGridPerCell);
+    }
+    XYCell XYToCell(XY xy)
     {
         return XYCell(xy.x,xy.y);
     }
@@ -147,6 +154,10 @@ bool ApproachToInteractInACross(XYCell cell)
 XYCell SquareToCell(XYSquare xy)
 {
     return XYCell(xy.x / numSquarePerCell, xy.y / numSquarePerCell);
+}
+int DistanceUP(int x, int y)
+{
+    return sqrt((x - selfInfo->x) * (x - selfInfo->x) + (y - selfInfo->y) * (y - selfInfo->y))+1;
 }
 #pragma endregion
 
@@ -233,6 +244,90 @@ void Initialize(const IStudentAPI& api)
                     for (int ii = max((i - 1) * numSquarePerCell + numSquarePerCell / 2 + 1, 0); ii < max((i + 1) * numSquarePerCell + numSquarePerCell / 2 - 1, 0); ++ii)
                         for (int jj = max((j - 1) * numSquarePerCell + numSquarePerCell / 2 + 1, 0); jj < max((j + 1) * numSquarePerCell + numSquarePerCell / 2 - 1, 0); ++jj)
                             speedOriMap[ii][jj] = myOriVelocity;
+                    break;
+            }
+        }
+    }
+}
+
+void Initialize(const ITrickerAPI& api)
+{
+    if (firstTime)
+        return;
+    memset(speedOriMap, 0x3f, sizeof(speedOriMap));
+    firstTime = true;
+    oriMap = api.GetFullMap();
+    myOriVelocity = api.GetSelfInfo()->speed;
+    int i = 0, j = 0, numClassroom = 0, numGate = 0;
+    int l = 0;  // temp
+
+    for (i = 0; i < Constants::rows; ++i)  // traverse all Cells
+    {
+        for (j = 0; j < Constants::rows; ++j)
+        {
+            switch (oriMap[i][j])  // To seek the placetype of this square, convert coordinates to cells first
+            {
+                case THUAI6::PlaceType::Wall:
+                case THUAI6::PlaceType::NullPlaceType:
+                case THUAI6::PlaceType::Chest:
+                    for (int ii = max((i - 1) * numSquarePerCell + numSquarePerCell / 2 + 1, 0); ii < min((i + 1) * numSquarePerCell + numSquarePerCell / 2 - 1, 490); ++ii)
+                        for (int jj = max((j - 1) * numSquarePerCell + numSquarePerCell / 2 + 1, 0); jj < min((j + 1) * numSquarePerCell + numSquarePerCell / 2 - 1, 490); ++jj)
+                            speedOriMap[ii][jj] = 0;
+                    break;
+                case THUAI6::PlaceType::Gate:
+                    for (int ii = max((i - 1) * numSquarePerCell + numSquarePerCell / 2 + 1, 0); ii < max((i + 1) * numSquarePerCell + numSquarePerCell / 2 - 1, 0); ++ii)
+                        for (int jj = max((j - 1) * numSquarePerCell + numSquarePerCell / 2 + 1, 0); jj < max((j + 1) * numSquarePerCell + numSquarePerCell / 2 - 1, 0); ++jj)
+                            speedOriMap[ii][jj] = 0;
+                    GateCell[numGate++] = XYCell(i, j);
+                    break;
+                case THUAI6::PlaceType::ClassRoom:
+                    for (int ii = max((i - 1) * numSquarePerCell + numSquarePerCell / 2 + 1, 0); ii < max((i + 1) * numSquarePerCell + numSquarePerCell / 2 - 1, 0); ++ii)
+                        for (int jj = max((j - 1) * numSquarePerCell + numSquarePerCell / 2 + 1, 0); jj < max((j + 1) * numSquarePerCell + numSquarePerCell / 2 - 1, 0); ++jj)
+                            speedOriMap[ii][jj] = 0;
+                    ClassroomCell[numClassroom++] = XYCell(i, j);
+                    break;
+                case THUAI6::PlaceType::Window:  // Cases with windows differ with player type and is non-linear with myOriVelocity
+                    l = Constants::Assassin::speedOfClimbingThroughWindows;
+                    for (int ii = max((i - 1) * numSquarePerCell + numSquarePerCell / 2 + 1, 0); ii < max((i + 1) * numSquarePerCell + numSquarePerCell / 2 - 1, 0); ++ii)
+                        for (int jj = max((j - 1) * numSquarePerCell + numSquarePerCell / 2 + 1, 0); jj < max((j + 1) * numSquarePerCell + numSquarePerCell / 2 - 1, 0); ++jj)
+                            speedOriMap[ii][jj] = l;
+                    break;
+                case THUAI6::PlaceType::Land:
+                case THUAI6::PlaceType::Grass:
+                default:
+                    for (int ii = max((i - 1) * numSquarePerCell + numSquarePerCell / 2 + 1, 0); ii < max((i + 1) * numSquarePerCell + numSquarePerCell / 2 - 1, 0); ++ii)
+                        for (int jj = max((j - 1) * numSquarePerCell + numSquarePerCell / 2 + 1, 0); jj < max((j + 1) * numSquarePerCell + numSquarePerCell / 2 - 1, 0); ++jj)
+                            speedOriMap[ii][jj] = myOriVelocity;
+                    break;
+            }
+        }
+    }
+}
+void drawMap(const ITrickerAPI& api)
+{
+    memset(untilTimeMap, 0x3f, sizeof(untilTimeMap));
+    for (int i = 0; i < Constants::rows; ++i)  // traverse all Cells
+    {
+        for (int j = 0; j < Constants::rows; ++j)
+        {
+            switch (oriMap[i][j])  // To seek the placetype of this square, convert coordinates to cells first
+            {
+                case THUAI6::PlaceType::Wall:
+                case THUAI6::PlaceType::NullPlaceType:
+                case THUAI6::PlaceType::ClassRoom:
+                case THUAI6::PlaceType::Gate:
+                case THUAI6::PlaceType::Chest:
+                    //
+                case THUAI6::PlaceType::Door6:
+                case THUAI6::PlaceType::Door3:
+                case THUAI6::PlaceType::Door5:
+                case THUAI6::PlaceType::HiddenGate:
+                    //   for (int k=)
+                    for (int ii = max((i - 1) * numSquarePerCell + numSquarePerCell / 2 + 1, 0); ii < max((i + 1) * numSquarePerCell + numSquarePerCell / 2 - 1, 0); ++ii)
+                        for (int jj = max((j - 1) * numSquarePerCell + numSquarePerCell / 2 + 1, 0); jj < max((j + 1) * numSquarePerCell + numSquarePerCell / 2 - 1, 0); ++jj)
+                            untilTimeMap[ii][jj] = -1;
+                    break;
+                default:
                     break;
             }
         }
@@ -461,9 +556,9 @@ XYSquare FindGate()
     //return (0,0)false
 }
 
-bool Commandable(const IStudentAPI& api)
+bool Commandable(const IAPI& api)
 {
-    auto p = selfInfoStudent->playerState;
+    auto p = selfInfo->playerState;
   //  printf("ok\n");
  //   api.PrintSelfInfo();
     return p != THUAI6::PlayerState::Addicted && p != THUAI6::PlayerState::Roused && p != THUAI6::PlayerState::Climbing && p != THUAI6::PlayerState::Attacking && p != THUAI6::PlayerState::Graduated && p != THUAI6::PlayerState::Quit && p != THUAI6::PlayerState::Stunned && p != THUAI6::PlayerState::Swinging;
@@ -473,7 +568,7 @@ void Update(const IStudentAPI& api)
 {
     gameInfo = api.GetGameInfo();
     selfInfoStudent = api.GetSelfInfo();
-    selfInfo = api.GetSelfInfo();
+    selfInfo = selfInfoStudent;
     selfSquare = numGridToXYSquare(selfInfoStudent->x, selfInfoStudent->y);
     //printf("%d %d self\n", selfSquare.x, selfSquare.y);
     for (int i = 0; i < Constants::numOfClassroom; ++i)
@@ -489,13 +584,21 @@ void Update(const IStudentAPI& api)
 void Update(const ITrickerAPI& api)
 {
     gameInfo = api.GetGameInfo();
-    selfInfo = api.GetSelfInfo();
-    selfSquare = numGridToXYSquare(selfInfoStudent->x, selfInfoStudent->y);
-    // printf("%d %d self\n", selfSquare.x, selfSquare.y);
+    selfInfoTricker = api.GetSelfInfo();
+    selfInfo = selfInfoTricker;
+    selfSquare = numGridToXYSquare(selfInfoTricker->x, selfInfoTricker->y);
     for (int i = 0; i < Constants::numOfClassroom; ++i)
+    {
         if (api.GetClassroomProgress(ClassroomCell[i].x, ClassroomCell[i].y) == 10000000)
             ClassroomCell[i] = XYCell(0, 0);
+    }
     myVelocity = selfInfo->speed;
+    auto stu = api.GetStudents();
+    if (stu.size()>0)
+    {
+        for (int i = 0; i < stu.size(); ++i)
+            students[stu[i]->playerID] = stu[i], studentsFrame[stu[i]->playerID] = api.GetFrameCount();
+    }
     // openedGateCell
     for (int i = 0; i < 2; ++i)
         if (api.GetGateProgress(ClassroomCell[i].x, ClassroomCell[i].y) == 18000)
@@ -587,8 +690,91 @@ void AI::play(IStudentAPI& api)
     }
 }
 
+XYSquare FindStudent()
+{
+    int i = 0;
+    while (students[i] == nullptr&&i<4)
+        ++i;
+    if (i == 4)
+        return XYSquare(0, 0);
+    XYSquare toFind = FindNearInCell(numGridToXYCell(students[i]->x, students[i]->y));
+    int d = disMap[toFind.x][toFind.y];
+    // printf("%d %d %d Class\n", toFind.x, toFind.y, disMap[toFind.x][toFind.y]);
+    for (; i < 4; ++i)
+        if (students[i] != nullptr && students[i]->playerState != THUAI6::PlayerState::Addicted && students[i]->playerState != THUAI6::PlayerState::Roused)
+    {
+            XYSquare t = FindNearInCell(numGridToXYCell(students[i]->x, students[i]->y));
+        if (disMap[t.x][t.y] < d)
+        {
+            toFind = t;
+            d = disMap[toFind.x][toFind.y];
+        }
+    }
+    return toFind;
+}
+
+bool TryToAttack(ITrickerAPI& api)
+{
+    int attackrange = (selfInfo->bulletType == THUAI6::BulletType::CommonAttackOfTricker) ? Constants::CommonAttackOfTricker::BulletAttackRange : Constants::FlyingKnife::BulletAttackRange;
+    if (api.GetStudents().size() > 0)
+    {
+    for (int i = 0; i < api.GetStudents().size(); ++i)
+        if (api.GetStudents()[i]->playerState != THUAI6::PlayerState::Addicted && api.GetStudents()[i]->playerState != THUAI6::PlayerState::Roused)
+        {
+            if (selfInfo->timeUntilSkillAvailable[0] == 0)
+                    api.UseSkill(0);
+            auto st = api.GetStudents()[i];
+            if (DistanceUP(st->x, st->y) < attackrange)
+            {
+                    api.Attack(atan2(st->y - selfInfo->y, st->x - selfInfo->x));
+                    return true;
+            }
+            else
+            {
+                    if (selfInfo->timeUntilSkillAvailable[1] == 0)
+                    {
+                        api.UseSkill(1);
+                        api.Attack(atan2(st->y - selfInfo->y, st->x - selfInfo->x));
+                        return true;
+                    }
+                    else
+                        Move(api, FindMoveNext(FindNearInCell(numGridToXYCell(st->x, st->y))));
+            }
+            return true;
+        }
+    return false;
+    }
+    else
+    return false;
+}
+
 void AI::play(ITrickerAPI& api)
 {
+      // api.Print("?\n");
     Update(api);
-    //Initialize(api);
+    Initialize(api);
+     api.Print("!\n");
+    drawMap(api);
+    SPFA();
+    if (Commandable(api) && !TryToAttack(api))
+    {
+    //XYSquare toGateSquare = FindStudent();
+    //if (toGateSquare.x != 0)
+    //{
+     // api.Print("!!\n");
+      //  Move(api, FindMoveNext(toGateSquare));
+   // }
+    //else
+    //{
+        XYSquare toGateSquare = FindGate();
+        if (toGateSquare.x != 0)
+        {
+            Move(api, FindMoveNext(toGateSquare));
+        }
+        else
+        {
+            Move(api, FindMoveNext(FindClassroom()));
+        }
+    }
+    //}
 }
