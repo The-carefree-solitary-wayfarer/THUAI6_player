@@ -1,0 +1,24 @@
+F-value is the determinant for chasing. It is a multi-variant function of Number of Remaining Students(NR), Students' properties (including career and position) and the Tricker's own properties(CD, position...).
+Let the position of the target Student be Xs, and that of the Tricker's be Xt.
+We should take the approximity of the Student and Machines, Tricker and other Students into account.
+As different careers affect behavior in completely different directions, it should be a parameter in a switch-case procedure.
+
+If K == 'Teacher':
+	F = (NR==1)? (\frac{a0 * |Xt - Xm|}{a1 * |Xt - Xs|} : 0;
+	return;
+	where a0, a1 are real parameters and Xm is the position of the nearest Machine;
+	//value 0 is to completely avoid the possibility of fixation on the Teacher
+
+Else:
+	//No need to consider the Student's skills: that's the work of other functions
+	F(NR, Xs, Xt, Xm, parameter_array(career))
+	R = 2 * log0.5(NR - ND) + 5 might be an appropriate coefficient with regards to NR, where ND is number of Deceased Students.
+	other factors:
+	RD = \frac{a2(career)}{|Xt - Xm|} is relevant to the relative distance between Tricker and Target;
+	Cluster = sum(\frac{a3(career, Stu1) * a3(career, Stu2)}{|Xs1 - Xs2| + min_distance}) is the cluster bonus. As this is unimportant, it is only additional.
+	Blood = (Within sight) ? Blood_value / Full_blood : (Full_blood + (Full_blood - last_Blood_value)*0.998^(frame_since_last)) / Full_blood,
+	considering the possibility of being replenished
+	Dir = 1 + a3 * cos<Xt-Xm, Xt-Xs> / |Xt-Xm|
+
+	Thus propose F = R * RD * (1 - a4(career) * Blood) * Dir + Cluster.
+	
