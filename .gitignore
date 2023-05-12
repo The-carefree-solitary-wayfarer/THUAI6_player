@@ -368,3 +368,6 @@ logic.cpp
 main.cpp
 DebugAPI.cpp
 Communication.cpp
+
+#Visio docs
+有限状态机.vsdx

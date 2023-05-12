@@ -20,5 +20,6 @@ Else:
 	considering the possibility of being replenished
 	Dir = 1 + a3 * cos<Xt-Xm, Xt-Xs> / |Xt-Xm|
 
-	Thus propose F = R * RD * (1 - a4(career) * Blood) * Dir + Cluster.
+	Thus propose F = R * RD * (1 - a4(career) * Blood) * Dir + Cluster, which can be extended to
+	F = (2 * log0.5(NR - ND) + 5) * frac{a2(career)}{|Xt - Xm|} * (1 - a4(career) * ((Within sight) ? Blood_value / Full_blood : (Full_blood + (Full_blood - last_Blood_value)*0.998^(frame_since_last)) / Full_blood))) * 1 + a3 * \frac{cos{<Xt-Xm, Xt-Xs>}}{|Xt-Xm|} + sum(\frac{a3(career, Stu1) * a3(career, Stu2)}{|Xs1 - Xs2| + min_distance}) 
 	
