@@ -38,6 +38,7 @@ std::shared_ptr<const THUAI6::Player> selfInfo;
 std::shared_ptr<const THUAI6::GameInfo> gameInfo;
 std::shared_ptr<const THUAI6::Student> students[4];
 int studentsFrame[4];
+std::vector<std::vector<double>> F_parameters;
 
 int myOriVelocity;
 int myVelocity;
@@ -177,7 +178,7 @@ class TrickerPerspect
 public:
     short StudentNumber;
     char MovementInUse;
-    short career;
+    THUAI6::StudentType career;
     bool isFixed;
     //-2 symbolizes only former is updated, -1 symbolizes NotUpdated but retains former value, 0 symbolizes NotFoundEver, 1 symbolizes useable and is updating
     TrickerPerspect(short number) :
@@ -187,7 +188,7 @@ public:
         movement[0] = XYGrid();
         movement[1] = XYGrid();
         this->F_value = 0;
-        this->career = 0;  // Means not acquired yet
+        this->career = THUAI6::StudentType::NullStudentType;  // Means not acquired yet
         this->isFixed = false;
         this->last_blood_value = 30000000;
     }
@@ -699,7 +700,11 @@ void Update(const ITrickerAPI& api)
     if (stu.size() > 0)
     {
         for (int i = 0; i < stu.size(); ++i)
+        {
             students[stu[i]->playerID] = stu[i], studentsFrame[stu[i]->playerID] = api.GetFrameCount();
+            if (Trickers_Students[stu[i]->playerID].career == THUAI6::StudentType::NullStudentType)
+                Trickers_Students[stu[i]->playerID].career = students[stu[i]->playerID]->studentType;
+        }
     }
     // openedGateCell
     for (int i = 0; i < 2; ++i)
@@ -851,8 +856,103 @@ bool TryToAttack(ITrickerAPI& api, short maxstudent)
 }
 // FUNCTIONS TO ACCOMPLISH
 
-void UpdateF(int number)
+inline double dist(const XYGrid& vec)
 {
+    return sqrt(vec.x * vec.x + vec.y * vec.y);
+}
+
+void UpdateF(ITrickerAPI& api, int number)
+{
+    F_parameters[0] = {0, 0, 1, 0, 0, 0, 0};
+    F_parameters[1] = {0, 1, 1, 1, 1, 1, 1};
+    F_parameters[2] = {0, 2, 0, 4, 5, 6, 7};
+    F_parameters[3] = {0, 2, 0, 4, 5, 6, 7};
+    F_parameters[4] = {0, 2, 0, 4, 5, 6, 7};
+    int defaultParameter = 333;
+    XYSquare MachineSquare = FindClassroom();
+    // Xs-Xm
+    XYGrid StudentToMachine(abs(students[number]->x - SquareToGrid(MachineSquare).x), abs(students[number]->y - SquareToGrid(MachineSquare).y));
+    // Xs-Xt
+    XYGrid StudentToTricker(abs(students[number]->x - selfInfo->x), abs(students[number]->y - selfInfo->y));
+    if (Trickers_Students[number].career == THUAI6::StudentType::Teacher)
+    {
+        if (api.GetGameInfo()->studentGraduated + api.GetGameInfo()->studentQuited == 3)  // Only one left in play
+        {
+            Trickers_Students[number].UpdateFValue(long long(round((F_parameters[0][int(THUAI6::StudentType::Teacher)]) + dist(StudentToMachine) / (F_parameters[1][int(THUAI6::StudentType::Teacher)] * dist(StudentToTricker)))));
+        }
+        else
+            Trickers_Students[number].UpdateFValue(0);
+    }
+    else
+    {
+        int i = 0, j = 0;
+        double smDist = dist(StudentToMachine);
+        double stDist = dist(StudentToTricker);
+        double R = 5 - 2 * log2(4 - api.GetGameInfo()->studentGraduated - api.GetGameInfo()->studentQuited);  // Coefficient
+        auto stu = api.GetStudents();
+        bool WithinSight = false;
+        // Check whether students[number] is within sight
+        for (i = 0; i < stu.size(); i++)
+        {
+            if (stu[i]->playerID == number)
+            {
+                WithinSight = true;
+                break;
+            }
+        }
+        double Blood = 0;
+        if (WithinSight)
+            Blood = students[number]->determination;
+        else
+        {
+            long long fullBlood = 30000000;
+            // Acquire full blood levels
+            switch (Trickers_Students[number].career)
+            {
+                case THUAI6::StudentType::Athlete:
+                    fullBlood = 3000000;
+                    break;
+                case THUAI6::StudentType::StraightAStudent:
+                    fullBlood = 3300000;
+                    break;
+                case THUAI6::StudentType::Sunshine:
+                    fullBlood = 3200000;
+                    break;
+                case THUAI6::StudentType::Robot:
+                    fullBlood = 3000;  // Needs replacing
+                    break;
+                case THUAI6::StudentType::TechOtaku:
+                    fullBlood = 900000;  // Needs replacing
+                    break;
+                default:
+                    fullBlood = 3000000;
+                    break;
+            }
+            Blood = fullBlood - (fullBlood - Trickers_Students[number].GetLastBlood()) * pow(0.998, api.GetFrameCount() - studentsFrame[number]);
+        }
+        if (WithinSight)
+        {
+            double RD = F_parameters[2][int(students[number]->studentType)] / smDist;
+            double Cluster = 0;
+            if (stu.size() > 1)
+            {
+                for (i = 0; i < stu.size(); i++)
+                {
+                    if (i != number)
+                        Cluster += F_parameters[3][int(students[number]->studentType)] * F_parameters[3][int(students[stu[i]->playerID]->studentType)] /
+                                   (800 + dist(XYGrid(abs(students[number]->x - stu[i]->x), abs(students[number]->y - stu[i]->y))));
+                }
+            }
+            double Dir = 1 + F_parameters[1][int(students[number]->studentType)] *
+                                 (StudentToMachine.x * StudentToTricker.x + StudentToMachine.y * StudentToTricker.y) /
+                                 (StudentToMachine.x * StudentToMachine.x + StudentToMachine.y * StudentToMachine.y);
+            Trickers_Students[number].UpdateFValue(R * RD * Dir * (1 - F_parameters[4][int(students[number]->studentType)] * Blood + Cluster));
+        }
+        else
+        {
+            Trickers_Students[number].UpdateFValue(R * Blood * defaultParameter);
+        }
+    }
     return;
 }
 
@@ -896,7 +996,7 @@ void AI::play(ITrickerAPI& api)
     int i = 0;
     for (i = 0; i < 4; ++i)
     {
-        UpdateF(i);
+        UpdateF(api, i);
         Trickers_Students[i].UpdateMovement(XYGrid(students[i]->x, students[i]->y));
     }
 
@@ -937,7 +1037,12 @@ void AI::play(ITrickerAPI& api)
             if (maxstudent >= 0)  // Such a student is found
             {
                 if (maxstudent != fixation)  // Target changed
+                {
+                    if (fixation >= 0)
+                        Trickers_Students[fixation].isFixed = false;
                     fixation = maxstudent;
+                    Trickers_Students[maxstudent].isFixed = true;
+                }
                 if (students[maxstudent]->addiction > 0)
                     TrickerStatus = 8;  // Sit Vigil
                 else
@@ -965,6 +1070,7 @@ void AI::play(ITrickerAPI& api)
                 {
                     if (api.GetFrameCount() - studentsFrame[fixation] > 300)  // Too long! give up for lost
                     {
+                        Trickers_Students[fixation].isFixed = false;
                         fixation = -1;
                         TrickerStatus = 0;
                     }
