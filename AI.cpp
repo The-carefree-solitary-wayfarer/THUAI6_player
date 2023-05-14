@@ -4,6 +4,8 @@
 #include <array>
 #include "AI.h"
 #include "constants.h"
+#define MeaningfulValue1 1  // F above this value means the student is valuable enough to use prop AddSpeed
+#define MeaningfulValue2 2  // F above this value means the student is valuable enough to use prop ClairAudience
 using namespace std;
 
 // 为假则play()期间确保游戏状态不更新，为真则只保证游戏状态在调用相关方法时不更新
@@ -187,7 +189,10 @@ public:
         this->F_value = 0;
         this->career = 0;  // Means not acquired yet
         this->isFixed = false;
+        this->last_blood_value = 30000000;
     }
+    inline long long GetLastBlood() const;
+    inline void UpdateBlood(long long new_blood);
     inline void UpdateMovement(XYGrid grid);
     inline void UpdateFValue(long long value);
     inline bool GetMovement(std::vector<XYGrid> copy) const;
@@ -196,7 +201,19 @@ public:
 private:
     std::vector<XYGrid> movement;
     unsigned long long F_value;
+    unsigned long long last_blood_value;
 };
+
+inline long long TrickerPerspect::GetLastBlood() const
+{
+    return this->last_blood_value;
+}
+
+inline void TrickerPerspect::UpdateBlood(long long new_blood)
+{
+    this->last_blood_value = new_blood;
+    return;
+}
 
 inline void TrickerPerspect::UpdateMovement(XYGrid grid)
 {
@@ -240,6 +257,8 @@ inline bool TrickerPerspect::GetMovement(std::vector<XYGrid> copy) const
     }
 }
 std::vector<TrickerPerspect> Trickers_Students;
+short TrickerStatus = -1;  // Initialize. Show the lasting status of the Tricker
+short fixation = -1;       // Symbolizes the status of the Tricker's fixation. 0~3 shows Student Number, -1 means not fixed
 #pragma endregion
 
 #pragma region Map
@@ -796,7 +815,7 @@ XYSquare FindStudent()
     return toFind;
 }
 
-bool TryToAttack(ITrickerAPI& api)
+bool TryToAttack(ITrickerAPI& api, short maxstudent)
 {
     int attackrange = int((selfInfo->bulletType == THUAI6::BulletType::CommonAttackOfTricker) ? Constants::CommonAttackOfTricker::BulletAttackRange : Constants::FlyingKnife::BulletAttackRange);
     if (api.GetStudents().size() > 0)
@@ -847,6 +866,26 @@ XYSquare FindStudentSquare(short no)
     return XYSquare(-1, -1);
 }
 
+short FindNextMaxStudent()
+{
+    return 0;
+}
+
+XYSquare FindGuardSquare(short target)
+{
+    return XYSquare(-1, -1);
+}
+
+XYSquare SeekDisappearSquare(short target)
+{
+    return XYSquare(-1, -1);
+}
+
+void Idle(ITrickerAPI& api)
+{
+    return;
+}
+
 void AI::play(ITrickerAPI& api)
 {
     Update(api);
@@ -863,31 +902,90 @@ void AI::play(ITrickerAPI& api)
 
     if (Commandable(api))
     {
-        short maxstudent = FindMaxStudent();
-        if (maxstudent > 0)
+        if (api.GetGateProgress(GateCell[0].x, GateCell[0].y) > 0)
         {
-            XYSquare toStudentSquare = FindStudentSquare(maxstudent);
-            if (toStudentSquare.x > 0)
+            XYSquare toGateSquare = FindGate();
+            if (toGateSquare.x > 0)
             {
-                Move(api, FindMoveNext(toStudentSquare));
+                Move(api, FindMoveNext(toGateSquare));
             }
         }
-        // if (toGateSquare.x != 0)
-        //{
-        //  api.Print("!!\n");
-        //   Move(api, FindMoveNext(toGateSquare));
-        // }
-        // else
-        //{
-        XYSquare toGateSquare = FindGate();
-        if (toGateSquare.x > 0)
+        if (TrickerStatus == 8)  // Sitting vigil
         {
-            Move(api, FindMoveNext(toGateSquare));
+            short approachingStudent = FindNextMaxStudent();
+            if (TryToAttack(api, approachingStudent))  // Try to attack approaching student
+                TrickerStatus = 4;                     // Become dizzy no matter successful or not
+            else                                       // Unable to attack
+            {
+                XYSquare toGuardSquare = FindGuardSquare(approachingStudent);
+                if (toGuardSquare.x > 0 && (toGuardSquare.x != selfInfo->x || toGuardSquare.y != selfInfo->y))  // Not already in it
+                {
+                    Move(api, FindMoveNext(toGuardSquare));
+                }
+            }
+            if (students[fixation]->playerState == THUAI6::PlayerState::Quit)  // End sitting vigil
+                TrickerStatus = 0;
         }
         else
         {
-            Move(api, FindMoveNext(FindClassroom()));
+            if (TrickerStatus == -1)
+                TrickerStatus = 0;   // End true "initialization"
+            if (TrickerStatus == 4)  // Was dizzy
+                TrickerStatus = 0;
+
+            short maxstudent = FindMaxStudent();
+            if (maxstudent >= 0)  // Such a student is found
+            {
+                if (maxstudent != fixation)  // Target changed
+                    fixation = maxstudent;
+                if (students[maxstudent]->addiction > 0)
+                    TrickerStatus = 8;  // Sit Vigil
+                else
+                {
+                    if (TryToAttack(api, maxstudent))  // Try to attack maxstudent
+                        TrickerStatus = 4;             // Become dizzy no matter successful or not
+                    else                               // Unable to attack
+                    {
+                        if (Trickers_Students[maxstudent].GetFValue() > MeaningfulValue1)
+                        {
+                            // Try using prop AddSpeed
+                        }
+                        XYSquare toStudentSquare = FindStudentSquare(maxstudent);
+                        if (toStudentSquare.x > 0)
+                        {
+                            Move(api, FindMoveNext(toStudentSquare));
+                        }
+                        TrickerStatus = 1;
+                    }
+                }
+            }
+            else  // Student not found
+            {
+                if (fixation >= 0)  // Existent in last run, target lost
+                {
+                    if (api.GetFrameCount() - studentsFrame[fixation] > 300)  // Too long! give up for lost
+                    {
+                        fixation = -1;
+                        TrickerStatus = 0;
+                    }
+                    if (Trickers_Students[fixation].GetFValue() > MeaningfulValue2)
+                    {
+                        // Try using prop clairaudience
+                    }
+                    XYSquare toDisappearSquare = SeekDisappearSquare(fixation);
+                    if (toDisappearSquare.x > 0)
+                    {
+                        Move(api, FindMoveNext(toDisappearSquare));
+                    }
+                }
+            }
         }
+        if (!TrickerStatus)
+            Idle(api);
     }
-    //}
+    else
+    {
+        TrickerStatus = 4;  // Dizzy
+        api.EndAllAction();
+    }
 }
