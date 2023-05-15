@@ -868,11 +868,11 @@ void UpdateF(ITrickerAPI& api, int number)
         Trickers_Students[number].UpdateFValue(0);
         return;
     }
-    F_parameters[0] = {0, 0, 1, 0, 0, 0, 0};
-    F_parameters[1] = {0, 1, 1, 1, 1, 1, 1};
-    F_parameters[2] = {0, 2, 0, 4, 5, 6, 7};
-    F_parameters[3] = {0, 2, 0, 4, 5, 6, 7};
-    F_parameters[4] = {0, 2, 0, 4, 5, 6, 7};
+    F_parameters[0] = {0, 0, 10000, 0, 0, 0, 0};
+    F_parameters[1] = {0, 1, 10000, 1, 1, 1, 1};
+    F_parameters[2] = {0, 20000, 0, 20000, 20000, 20000, 20000};
+    F_parameters[3] = {0, 200, 0, 200, 200, 200, 200};
+    F_parameters[4] = {0, 0.4, 0, 0.4, 0.4, 0.4, 0.4};
     int defaultParameter = 333;
     XYSquare MachineSquare = FindClassroom();
     // Xs-Xm
@@ -1044,7 +1044,7 @@ XYSquare FindGuardSquare(ITrickerAPI& api, short guard, short target)  // Find s
         double theta1 = atan2(arr1.y, arr1.x);
         XYGrid aim(students[guard]->x + students[guard]->radius * 3 * cos(0.5 * theta + 0.5 * theta1), students[guard]->x + students[guard]->radius * 3 * sin(0.5 * theta + 0.5 * theta1));
         THUAI6::PlaceType aimed = api.GetPlaceType(aim.x, aim.y);
-        while (aimed != THUAI6::PlaceType::Grass && aimed != THUAI6::PlaceType::Land && aimed != THUAI6::PlaceType::HiddenGate)  // Out of reach
+        while (aimed != THUAI6::PlaceType::Grass && aimed != THUAI6::PlaceType::Land && aimed != THUAI6::PlaceType::HiddenGate)  // Unable to enter
         {
             theta += (theta1 - theta) * 0.2;
             aim = XYGrid(students[guard]->x + students[guard]->radius * 3 * cos(0.5 * theta + 0.5 * theta1), students[guard]->x + students[guard]->radius * 3 * sin(0.5 * theta + 0.5 * theta1));
@@ -1054,13 +1054,128 @@ XYSquare FindGuardSquare(ITrickerAPI& api, short guard, short target)  // Find s
     }
 }
 
-XYSquare SeekDisappearSquare(short target)
+XYSquare SeekDisappearSquare(ITrickerAPI& api, short target)
 {
-    return XYSquare(-1, -1);
+    if (Trickers_Students[target].MovementInUse == -1 || (Trickers_Students[target].MovementInUse == 1))  // Able to get movement
+    {
+        std::vector<XYGrid> movement;
+        Trickers_Students[target].GetMovement(movement);
+        movement[2] = XYGrid(movement[0].x + movement[0].x - movement[1].x, movement[0].y + movement[0].y - movement[1].y);
+        XYCell cell = SquareToCell(GridToSquare(movement[2]));  // Convert to xycell
+        THUAI6::PlaceType aim = oriMap[cell.x][cell.y];
+        if (aim == THUAI6::PlaceType::Grass || aim == THUAI6::PlaceType::Window ||
+            aim == THUAI6::PlaceType::Door3 || aim == THUAI6::PlaceType::Door5 || aim == THUAI6::PlaceType::Door6)
+        {
+            if (api.HaveView(movement[2].x, movement[2].y) &&
+                (aim == THUAI6::PlaceType::Door3 || aim == THUAI6::PlaceType::Door5 || aim == THUAI6::PlaceType::Door6) && !(api.IsDoorOpen(cell.x, cell.y)))  // Can see a locked door
+                return XYSquare(-1, -1);                                                                                                                       // Not worthy of pursuing
+            else
+                return GridToSquare(CellToGrid(cell));  // Suppose continue on a straight line
+        }
+    }
+    // Traverse adjacent cells
+    XYCell suppose = SquareToCell(GridToSquare(XYGrid(students[target]->x, students[target]->y)));
+    THUAI6::PlaceType aim = oriMap[suppose.x][suppose.y];
+    if (aim == THUAI6::PlaceType::Grass || aim == THUAI6::PlaceType::Window ||
+        aim == THUAI6::PlaceType::Door3 || aim == THUAI6::PlaceType::Door5 || aim == THUAI6::PlaceType::Door6)
+    {
+        if (api.HaveView(students[target]->x, students[target]->y) &&
+            (aim == THUAI6::PlaceType::Door3 || aim == THUAI6::PlaceType::Door5 || aim == THUAI6::PlaceType::Door6) && !(api.IsDoorOpen(students[target]->x, students[target]->y)))  // Can see a locked door
+            return XYSquare(-1, -1);                                                                                                                                                 // Not worthy of pursuing
+        else
+            return GridToSquare(CellToGrid(suppose));  // Suppose continue on a straight line
+    }
+    aim = oriMap[suppose.x + 1][suppose.y];
+    int delta = students[target]->speed / 1000 * framet;
+    if (aim == THUAI6::PlaceType::Grass || aim == THUAI6::PlaceType::Window ||
+        aim == THUAI6::PlaceType::Door3 || aim == THUAI6::PlaceType::Door5 || aim == THUAI6::PlaceType::Door6)
+    {
+        if (api.HaveView(students[target]->x + delta, students[target]->y) &&
+            (aim == THUAI6::PlaceType::Door3 || aim == THUAI6::PlaceType::Door5 || aim == THUAI6::PlaceType::Door6) && !(api.IsDoorOpen(students[target]->x + delta, students[target]->y)))  // Can see a locked door
+            return XYSquare(-1, -1);                                                                                                                                                         // Not worthy of pursuing
+        else
+            return GridToSquare(CellToGrid(XYCell(suppose.x + 1, suppose.y)));  // Suppose continue on a straight line
+    }
+    aim = oriMap[suppose.x][suppose.y + 1];
+    if (aim == THUAI6::PlaceType::Grass || aim == THUAI6::PlaceType::Window ||
+        aim == THUAI6::PlaceType::Door3 || aim == THUAI6::PlaceType::Door5 || aim == THUAI6::PlaceType::Door6)
+    {
+        if (api.HaveView(students[target]->x, students[target]->y + delta) &&
+            (aim == THUAI6::PlaceType::Door3 || aim == THUAI6::PlaceType::Door5 || aim == THUAI6::PlaceType::Door6) && !(api.IsDoorOpen(students[target]->x, students[target]->y + delta)))  // Can see a locked door
+            return XYSquare(-1, -1);                                                                                                                                                         // Not worthy of pursuing
+        else
+            return GridToSquare(CellToGrid(XYCell(suppose.x, suppose.y + 1)));  // Suppose continue on a straight line
+    }
+    aim = oriMap[suppose.x - 1][suppose.y];
+    if (aim == THUAI6::PlaceType::Grass || aim == THUAI6::PlaceType::Window ||
+        aim == THUAI6::PlaceType::Door3 || aim == THUAI6::PlaceType::Door5 || aim == THUAI6::PlaceType::Door6)
+    {
+        if (api.HaveView(students[target]->x - delta, students[target]->y) &&
+            (aim == THUAI6::PlaceType::Door3 || aim == THUAI6::PlaceType::Door5 || aim == THUAI6::PlaceType::Door6) && !(api.IsDoorOpen(students[target]->x - delta, students[target]->y)))  // Can see a locked door
+            return XYSquare(-1, -1);                                                                                                                                                         // Not worthy of pursuing
+        else
+            return GridToSquare(CellToGrid(XYCell(suppose.x - 1, suppose.y)));  // Suppose continue on a straight line
+    }
+    aim = oriMap[suppose.x][suppose.y - 1];
+    if (aim == THUAI6::PlaceType::Grass || aim == THUAI6::PlaceType::Window ||
+        aim == THUAI6::PlaceType::Door3 || aim == THUAI6::PlaceType::Door5 || aim == THUAI6::PlaceType::Door6)
+    {
+        if (api.HaveView(students[target]->x, students[target]->y - delta) &&
+            (aim == THUAI6::PlaceType::Door3 || aim == THUAI6::PlaceType::Door5 || aim == THUAI6::PlaceType::Door6) && !(api.IsDoorOpen(students[target]->x, students[target]->y - delta)))  // Can see a locked door
+            return XYSquare(-1, -1);                                                                                                                                                         // Not worthy of pursuing
+        else
+            return GridToSquare(CellToGrid(XYCell(suppose.x, suppose.y - 1)));  // Suppose continue on a straight line
+    }
+    aim = oriMap[suppose.x + 1][suppose.y + 1];
+    if (aim == THUAI6::PlaceType::Grass || aim == THUAI6::PlaceType::Window ||
+        aim == THUAI6::PlaceType::Door3 || aim == THUAI6::PlaceType::Door5 || aim == THUAI6::PlaceType::Door6)
+    {
+        if (api.HaveView(students[target]->x + 0.8 * delta, students[target]->y + 0.8 * delta) &&
+            (aim == THUAI6::PlaceType::Door3 || aim == THUAI6::PlaceType::Door5 || aim == THUAI6::PlaceType::Door6) && !(api.IsDoorOpen(students[target]->x + 0.8 * delta, students[target]->y + 0.8 * delta)))  // Can see a locked door
+            return XYSquare(-1, -1);                                                                                                                                                                             // Not worthy of pursuing
+        else
+            return GridToSquare(CellToGrid(XYCell(suppose.x + 1, suppose.y + 1)));  // Suppose continue on a straight line
+    }
+    aim = oriMap[suppose.x - 1][suppose.y + 1];
+    if (aim == THUAI6::PlaceType::Grass || aim == THUAI6::PlaceType::Window ||
+        aim == THUAI6::PlaceType::Door3 || aim == THUAI6::PlaceType::Door5 || aim == THUAI6::PlaceType::Door6)
+    {
+        if (api.HaveView(students[target]->x - 0.8 * delta, students[target]->y + 0.8 * delta) &&
+            (aim == THUAI6::PlaceType::Door3 || aim == THUAI6::PlaceType::Door5 || aim == THUAI6::PlaceType::Door6) && !(api.IsDoorOpen(students[target]->x - 0.8 * delta, students[target]->y + 0.8 * delta)))  // Can see a locked door
+            return XYSquare(-1, -1);                                                                                                                                                                             // Not worthy of pursuing
+        else
+            return GridToSquare(CellToGrid(XYCell(suppose.x - 1, suppose.y + 1)));  // Suppose continue on a straight line
+    }
+    aim = oriMap[suppose.x - 1][suppose.y - 1];
+    if (aim == THUAI6::PlaceType::Grass || aim == THUAI6::PlaceType::Window ||
+        aim == THUAI6::PlaceType::Door3 || aim == THUAI6::PlaceType::Door5 || aim == THUAI6::PlaceType::Door6)
+    {
+        if (api.HaveView(students[target]->x - 0.8 * delta, students[target]->y - 0.8 * delta) &&
+            (aim == THUAI6::PlaceType::Door3 || aim == THUAI6::PlaceType::Door5 || aim == THUAI6::PlaceType::Door6) && !(api.IsDoorOpen(students[target]->x - 0.8 * delta, students[target]->y - 0.8 * delta)))  // Can see a locked door
+            return XYSquare(-1, -1);                                                                                                                                                                             // Not worthy of pursuing
+        else
+            return GridToSquare(CellToGrid(XYCell(suppose.x - 1, suppose.y - 1)));  // Suppose continue on a straight line
+    }
+    aim = oriMap[suppose.x + 1][suppose.y - 1];
+    if (aim == THUAI6::PlaceType::Grass || aim == THUAI6::PlaceType::Window ||
+        aim == THUAI6::PlaceType::Door3 || aim == THUAI6::PlaceType::Door5 || aim == THUAI6::PlaceType::Door6)
+    {
+        if (api.HaveView(students[target]->x + 0.8 * delta, students[target]->y - 0.8 * delta) &&
+            (aim == THUAI6::PlaceType::Door3 || aim == THUAI6::PlaceType::Door5 || aim == THUAI6::PlaceType::Door6) && !(api.IsDoorOpen(students[target]->x + 0.8 * delta, students[target]->y - 0.8 * delta)))  // Can see a locked door
+            return XYSquare(-1, -1);                                                                                                                                                                             // Not worthy of pursuing
+        else
+            return GridToSquare(CellToGrid(XYCell(suppose.x + 1, suppose.y - 1)));  // Suppose continue on a straight line
+    }
+    return XYSquare(-1, -1);  // Disappearing square not found
 }
 
 void Idle(ITrickerAPI& api)
 {
+    XYSquare a = FindClassroom();
+    if (a.x > 0)
+    {
+        Move(api, FindMoveNext(a));
+    }
     return;
 }
 
@@ -1164,7 +1279,7 @@ void AI::play(ITrickerAPI& api)
                     {
                         // Try using prop clairaudience
                     }
-                    XYSquare toDisappearSquare = SeekDisappearSquare(fixation);
+                    XYSquare toDisappearSquare = SeekDisappearSquare(api, fixation);
                     if (toDisappearSquare.x > 0)
                     {
                         Move(api, FindMoveNext(toDisappearSquare));
