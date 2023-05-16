@@ -848,38 +848,33 @@ XYSquare FindStudent()
 bool TryToAttack(ITrickerAPI& api, short maxstudent)
 {
     int attackrange = int((selfInfo->bulletType == THUAI6::BulletType::CommonAttackOfTricker) ? Constants::CommonAttackOfTricker::BulletAttackRange : Constants::FlyingKnife::BulletAttackRange);
-    if (api.GetStudents().size() > 0)
+    int xx = Trickers_Students[maxstudent].GetLatestCooridinates().x, yy = Trickers_Students[maxstudent].GetLatestCooridinates().y;
+    THUAI6::PlaceType aimed = oriMap[SquareToCell(GridToSquare(Trickers_Students[maxstudent].GetLatestCooridinates())).x]
+                                    [SquareToCell(GridToSquare(Trickers_Students[maxstudent].GetLatestCooridinates())).y];
+    if ((Trickers_Students[maxstudent].playerstate != THUAI6::PlayerState::Addicted && Trickers_Students[maxstudent].playerstate != THUAI6::PlayerState::Roused) && (aimed == THUAI6::PlaceType::Grass || aimed == THUAI6::PlaceType::Land))
     {
-        for (int i = 0; i < api.GetStudents().size(); ++i)
-            if (api.GetStudents()[i]->playerState != THUAI6::PlayerState::Addicted && api.GetStudents()[i]->playerState != THUAI6::PlayerState::Roused)
+        if (selfInfo->timeUntilSkillAvailable[0] == 0)
+            api.UseSkill(0);
+        XYGrid TrickerToStudent(xx - selfInfo->x, yy - selfInfo->y);
+        if (dist(TrickerToStudent) + 1 < attackrange)
+        {
+            api.Attack(atan2(TrickerToStudent.y, TrickerToStudent.x));
+            return true;
+        }
+        else
+        {
+            if (selfInfo->timeUntilSkillAvailable[1] == 0)
             {
-                if (selfInfo->timeUntilSkillAvailable[0] == 0)
-                    api.UseSkill(0);
-                std::shared_ptr<const THUAI6::Student> st = api.GetStudents()[i];
-                if (DistanceUP(st->x, st->y) < attackrange)
-                {
-                    api.Attack(atan2(st->y - selfInfo->y, st->x - selfInfo->x));
-                    return true;
-                }
-                else
-                {
-                    if (selfInfo->timeUntilSkillAvailable[1] == 0)
-                    {
-                        api.UseSkill(1);
-                        api.Attack(atan2(st->y - selfInfo->y, st->x - selfInfo->x));
-                        return true;
-                    }
-                    else
-                        Move(api, FindMoveNext(FindNearInCell(numGridToXYCell(st->x, st->y))));
-                }
+                api.UseSkill(1);
+                api.Attack(atan2(TrickerToStudent.y, TrickerToStudent.x));
                 return true;
             }
-        return false;
+            else
+                return false;
+        }
     }
-    else
-        return false;
+    return false;
 }
-// FUNCTIONS TO ACCOMPLISH
 
 inline double dist(const XYGrid& vec)
 {
