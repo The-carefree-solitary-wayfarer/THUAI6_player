@@ -367,6 +367,11 @@ void Initialize(const IStudentAPI& api)
     }
 }
 
+inline double dist(const XYGrid& vec)
+{
+    return sqrt(vec.x * vec.x + vec.y * vec.y);
+}
+
 void Initialize(const ITrickerAPI& api)
 {
     if (firstTime)
@@ -874,11 +879,6 @@ bool TryToAttack(ITrickerAPI& api, short maxstudent)
         }
     }
     return false;
-}
-
-inline double dist(const XYGrid& vec)
-{
-    return sqrt(vec.x * vec.x + vec.y * vec.y);
 }
 
 void UpdateF(ITrickerAPI& api, int number)
