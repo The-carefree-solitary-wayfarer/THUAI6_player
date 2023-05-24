@@ -38,6 +38,7 @@ std::shared_ptr<const THUAI6::Player> selfInfo;
 std::shared_ptr<const THUAI6::GameInfo> gameInfo;
 std::shared_ptr<const THUAI6::Student> students[4];
 int studentsFrame[4];
+int TrickerIdlePhase = 0;
 double F_parameters[5][7] = {{0, 0, 10000, 0, 0, 0, 0}, {0, 1, 10000, 1, 1, 1, 1}, {0, 20000, 0, 20000, 20000, 20000, 20000}, {0, 200, 0, 200, 200, 200, 200}, {0, 0.4, 0, 0.4, 0.4, 0.4, 0.4}};
 
 int myOriVelocity;
@@ -86,7 +87,13 @@ public:
         XY()
     {
     }
+    friend bool operator==(XYSquare comp1, XYSquare comp2);
 } selfSquare;
+
+bool operator==(XYSquare comp1, XYSquare comp2)
+{
+    return (comp1.x == comp2.x && comp1.y == comp2.y);
+}
 
 class XYGrid : public XY
 {
@@ -172,6 +179,103 @@ int DistanceUP(int x, int y)
     return int(sqrt((x - selfInfo->x) * (x - selfInfo->x) + (y - selfInfo->y) * (y - selfInfo->y)) + 1);
 }
 #pragma endregion
+
+#pragma region Map
+std::vector<std::vector<THUAI6::PlaceType>> oriMap;
+int speedOriMap[myRow][myRow];   // 0 Wall
+int untilTimeMap[myRow][myRow];  //处理门，隐藏校门等
+int disMap[myRow][myRow];        //实际距离
+XYSquare fromMap[myRow][myRow];
+
+XYCell ClassroomCell[Constants::numOfClassroom];
+XYCell openedGateCell[2 + 1];
+XYCell GateCell[2];
+// XYCell DoorCell
+#pragma endregion
+// The region above is moved to use oriMap
+
+XYSquare IdleAim = XYSquare(-1, -1);
+class BGM_Utilize
+{
+public:
+    void UpdateBGM(double trickDesire, double classVolume);
+    inline bool Decreasing() const;
+    XYSquare GradientAim() const;
+    inline bool DecreasingClassVolume() const;
+    inline void GetDir(double dirs[2]) const;
+    inline void GetField(bool row, double ret[2]) const;
+
+private:
+    double bgm[2][3] = {0};
+    double PastDir[2] = {0};
+} BGM;
+
+void BGM_Utilize::UpdateBGM(double trickDesire, double classVolume)
+{
+    this->bgm[0][2] = this->bgm[0][1], this->bgm[1][2] = this->bgm[1][1];
+    this->bgm[0][1] = this->bgm[0][0], this->bgm[1][1] = this->bgm[1][0];
+    this->bgm[0][0] = trickDesire, this->bgm[1][2] = classVolume;
+    PastDir[1] = PastDir[0];
+    PastDir[0] = selfInfo->facingDirection;
+    return;
+}
+
+inline bool BGM_Utilize::Decreasing() const
+{
+    return (this->bgm[0][0] < this->bgm[0][2] && this->bgm[1][0] < this->bgm[1][2]);
+}
+
+inline bool BGM_Utilize::DecreasingClassVolume() const
+{
+    return this->bgm[1][0] < this->bgm[1][2];
+}
+
+inline void BGM_Utilize::GetDir(double dirs[2]) const
+{
+    dirs[0] = this->PastDir[0];
+    dirs[1] = this->PastDir[1];
+    return;
+}
+
+inline void BGM_Utilize::GetField(bool row, double ret[2]) const
+{
+    if (row)
+    {
+        ret[0] = this->bgm[1][0] - this->bgm[1][1];
+        ret[1] = this->bgm[1][1] - this->bgm[1][2];
+    }
+    else
+    {
+        ret[0] = this->bgm[0][0] - this->bgm[0][1];
+        ret[1] = this->bgm[0][1] - this->bgm[0][2];
+    }
+    return;
+}
+
+double SeekDir(double dir1, double dir2, double grad1, double grad2)
+{
+    return 0;
+}
+
+XYSquare BGM_Utilize::GradientAim() const
+{
+    double dirs[2] = {0};
+    BGM.GetDir(dirs);
+    double grads[2] = {0};
+    if (DecreasingClassVolume())
+        BGM.GetField(true, grads);  // Find larger classVolume
+    else
+        BGM.GetField(false, grads);                                 // Normally does not happen, but try to be compatible to find larger TrickDesire
+    double asylum = SeekDir(dirs[0], dirs[1], grads[0], grads[1]);  // Direction of ascending BGM
+    XYGrid aiming((int)(selfInfoTricker->x + 20000 / bgm[1][1] * cos(asylum)), (int)(selfInfoTricker->y + 20000 / bgm[1][1] * sin(asylum)));
+    while ((aiming.x < 1000 || aiming.x >= 49000 || aiming.y < 1000 || aiming.y >= 49000) ||
+           (oriMap[SquareToCell(GridToSquare(aiming)).x][SquareToCell(GridToSquare(aiming)).y] != THUAI6::PlaceType::Grass && oriMap[SquareToCell(GridToSquare(aiming)).x][SquareToCell(GridToSquare(aiming)).y] != THUAI6::PlaceType::Land))
+    {
+        aiming.x -= (int)(round(1000 * cos(asylum)));
+        aiming.y -= (int)(round(1000 * sin(asylum)));
+    }
+    return GridToSquare(CellToGrid(SquareToCell(GridToSquare(aiming))));  // Repeated procedures turn target to center of the cell
+}
 
 // How a Tricker perceives a Student
 class TrickerPerspect
@@ -277,19 +381,6 @@ inline bool TrickerPerspect::GetMovement(XYGrid* copy) const
 TrickerPerspect Trickers_Students[4] = {TrickerPerspect(0), TrickerPerspect(1), TrickerPerspect(2), TrickerPerspect(3)};
 short TrickerStatus = -1;  // Initialize. Show the lasting status of the Tricker
 short fixation = -1;       // Symbolizes the status of the Tricker's fixation. 0~3 shows Student Number, -1 means not fixed
-
-#pragma region Map
-std::vector<std::vector<THUAI6::PlaceType>> oriMap;
-int speedOriMap[myRow][myRow];   // 0 Wall
-int untilTimeMap[myRow][myRow];  //处理门，隐藏校门等
-int disMap[myRow][myRow];        //实际距离
-XYSquare fromMap[myRow][myRow];
-
-XYCell ClassroomCell[Constants::numOfClassroom];
-XYCell openedGateCell[2 + 1];
-XYCell GateCell[2];
-// XYCell DoorCell
-#pragma endregion
 
 THUAI6::PlaceType CellPlaceType(XYCell cell)
 {
@@ -645,6 +736,26 @@ XYSquare FindNearInCell(XYCell cell)
             toFind = XYSquare(i, j);
         }
     return toFind;
+}
+
+XYCell FindActualClassroom(ITrickerAPI& api)  // Instead of finding a cell near a classroom, we need actual coordinates of one
+{
+    double min = 100000;
+    int i = 0, ind = -1;
+    for (i = 0; i < 10; ++i)
+    {
+        XYGrid vec = CellToGrid(ClassroomCell[i]);
+        vec.x -= selfInfo->x, vec.y -= selfInfo->y;
+        if (dist(vec) < min)
+        {
+            ind = i;
+            min = dist(vec);
+        }
+    }
+    if (ind == -1)
+        return XYCell(-1, -1);
+    else
+        return ClassroomCell[ind];
 }
 
 XYSquare FindClassroom()
@@ -1004,7 +1115,7 @@ void UpdateF(ITrickerAPI& api, int number)
             {
                 for (i = 0; i < stu.size(); i++)
                 {
-                    if (i != number)
+                    if (i != number && Trickers_Students[number].playerstate != THUAI6::PlayerState::Quit)
                         Cluster += F_parameters[3][int(Trickers_Students[number].career)] * F_parameters[3][int(Trickers_Students[stu[i]->playerID].career)] /
                                    (Trickers_Students[number].radius * 2 + dist(XYGrid(abs(Trickers_Students[number].GetLatestCooridinates().x - stu[i]->x), abs(Trickers_Students[number].GetLatestCooridinates().y - stu[i]->y))));
                 }
@@ -1094,33 +1205,33 @@ XYSquare FindGuardSquare(ITrickerAPI& api, short guard, short target)  // Find s
     double theta = atan2(arr.y, arr.x);
     if (dist(arr) > 5 * Trickers_Students[guard].radius * 3)  // Able to intercept
     {
-        XYGrid aim(int(round(Trickers_Students[guard].GetLatestCooridinates().x + Trickers_Students[guard].radius * 3 * cos(theta))), int(round(Trickers_Students[guard].GetLatestCooridinates().y + Trickers_Students[guard].radius * 3 * sin(theta))));
-        THUAI6::PlaceType aimed = api.GetPlaceType(aim.x, aim.y);
+        XYCell aim(SquareToCell(GridToSquare(XYGrid((int)(round(Trickers_Students[guard].GetLatestCooridinates().x + Trickers_Students[guard].radius * 3 * cos(theta))), int(round(Trickers_Students[guard].GetLatestCooridinates().y + Trickers_Students[guard].radius * 6 * sin(theta)))))));
+        THUAI6::PlaceType aimed = oriMap[aim.x][aim.y];
         api.Print("1055\n");
         while (aimed != THUAI6::PlaceType::Grass && aimed != THUAI6::PlaceType::Land && aimed != THUAI6::PlaceType::HiddenGate)  // Out of reach
         {
             XYGrid arr1(selfInfo->x - Trickers_Students[guard].GetLatestCooridinates().x, selfInfo->y - Trickers_Students[guard].GetLatestCooridinates().y);
             double theta1 = atan2(arr1.y, arr1.x);
             theta += (theta1 - theta) * 0.1;
-            aim = XYGrid(int(round(Trickers_Students[guard].GetLatestCooridinates().x + Trickers_Students[guard].radius * 3 * cos(theta))), int(round(Trickers_Students[guard].GetLatestCooridinates().y + Trickers_Students[guard].radius * 3 * sin(theta))));
-            aimed = api.GetPlaceType(aim.x, aim.y);
+            aim = SquareToCell(GridToSquare(XYGrid(int(round(Trickers_Students[guard].GetLatestCooridinates().x + Trickers_Students[guard].radius * 3 * cos(theta))), int(round(Trickers_Students[guard].GetLatestCooridinates().y + Trickers_Students[guard].radius * 6 * sin(theta))))));
+            aimed = oriMap[aim.x][aim.y];
         }
-        return (GridToSquare(aim));
+        return GridToSquare(CellToGrid(aim));
     }
     else  // Unable to intercept
     {
         api.Print("1067\n");
         XYGrid arr1(selfInfo->x - Trickers_Students[guard].GetLatestCooridinates().x, selfInfo->y - Trickers_Students[guard].GetLatestCooridinates().y);
         double theta1 = atan2(arr1.y, arr1.x);
-        XYGrid aim(int(round(Trickers_Students[guard].GetLatestCooridinates().x + Trickers_Students[guard].radius * 3 * cos(0.5 * theta + 0.5 * theta1))), int(round(Trickers_Students[guard].GetLatestCooridinates().y + Trickers_Students[guard].radius * 3 * sin(0.5 * theta + 0.5 * theta1))));
+        XYCell aim(SquareToCell(GridToSquare(XYGrid(int(round(Trickers_Students[guard].GetLatestCooridinates().x + Trickers_Students[guard].radius * 3 * cos(0.5 * theta + 0.5 * theta1))), int(round(Trickers_Students[guard].GetLatestCooridinates().y + Trickers_Students[guard].radius * 3 * sin(0.5 * theta + 0.5 * theta1)))))));
         THUAI6::PlaceType aimed = api.GetPlaceType(aim.x, aim.y);
         while (aimed != THUAI6::PlaceType::Grass && aimed != THUAI6::PlaceType::Land && aimed != THUAI6::PlaceType::HiddenGate)  // Unable to enter
         {
             theta += (theta1 - theta) * 0.2;
-            aim = XYGrid(int(round(Trickers_Students[guard].GetLatestCooridinates().x + Trickers_Students[guard].radius * 3 * cos(0.5 * theta + 0.5 * theta1))), int(round(Trickers_Students[guard].GetLatestCooridinates().y + Trickers_Students[guard].radius * 3 * sin(0.5 * theta + 0.5 * theta1))));
+            aim = SquareToCell(GridToSquare(XYGrid(int(round(Trickers_Students[guard].GetLatestCooridinates().x + Trickers_Students[guard].radius * 3 * cos(0.5 * theta + 0.5 * theta1))), int(round(Trickers_Students[guard].GetLatestCooridinates().y + Trickers_Students[guard].radius * 3 * sin(0.5 * theta + 0.5 * theta1))))));
             aimed = api.GetPlaceType(aim.x, aim.y);
         }
-        return (GridToSquare(aim));
+        return (GridToSquare(CellToGrid(aim)));
     }
 }
 
@@ -1139,7 +1250,7 @@ XYSquare SeekDisappearSquare(ITrickerAPI& api, short target)
         {
             if (api.HaveView(movement[2].x, movement[2].y) &&
                 (aim == THUAI6::PlaceType::Door3 || aim == THUAI6::PlaceType::Door5 || aim == THUAI6::PlaceType::Door6) && !(api.IsDoorOpen(cell.x, cell.y)))  // Can see a locked door
-                return XYSquare(-1, -1);                                                                                                                       // Not worthy of pursuing
+                return GridToSquare(movement[0]);                                                                                                              // Not worthy of pursuing
             else
                 return GridToSquare(CellToGrid(cell));  // Suppose continue on a straight line
         }
@@ -1246,36 +1357,127 @@ XYSquare SeekDisappearSquare(ITrickerAPI& api, short target)
     return XYSquare(-1, -1);  // Disappearing square not found
 }
 
-void Idle(ITrickerAPI& api)
+XYSquare SeekInvisibleStudent(ITrickerAPI& api)
 {
-    XYSquare a = FindClassroom();
-    api.Print("1201\n");
-    printf("Classroom %d %d\n", a.x, a.y);
-    if (a.x > 0)
+    XYSquare ret(-1, -1);
+    double grads[2] = {0};
+    BGM.GetField(true, grads);
+    if (abs(grads[0]) < 0.02 && abs(grads[1]) < 0.02)  // No significant change
     {
-        Move(api, FindMoveNext(a));
-        api.Print("1204\n");
-    }
-    else
-    {
-        a = FindGate();
-        printf("Gate %d %d\n", a.x, a.y);
-        if (a.x > 0)
+        BGM.GetField(false, grads);
+        if (abs(grads[0]) < 0.02 && abs(grads[1]) < 0.02)  // Still no change
         {
-            Move(api, FindMoveNext(a));
-            api.Print("1211\n");
+            XYGrid aiming(2 * selfInfo->x - 25000, 2 * selfInfo->y - 25000);
+            double asylum = atan2(aiming.y - selfInfo->y, aiming.x - selfInfo->x);  // Direction of Cross-Diagonals
+            while ((aiming.x < 1000 || aiming.x >= 49000 || aiming.y < 1000 || aiming.y >= 49000) ||
+                   (oriMap[SquareToCell(GridToSquare(aiming)).x][SquareToCell(GridToSquare(aiming)).y] != THUAI6::PlaceType::Grass && oriMap[SquareToCell(GridToSquare(aiming)).x][SquareToCell(GridToSquare(aiming)).y] != THUAI6::PlaceType::Land))
+            {
+                aiming.x += (int)(round(1000 * cos(asylum)));
+                aiming.y += (int)(round(1000 * sin(asylum)));  // On the opposite, try aiming further
+            }
+            return GridToSquare(CellToGrid(SquareToCell(GridToSquare(aiming))));  // Repeated procedures turn target to center of the cell
         }
         else
         {
-            if (api.GetPlaceType(SquareToCell(GridToSquare(XYGrid(selfInfo->x, selfInfo->y))).x - 1, SquareToCell(GridToSquare(XYGrid(selfInfo->x, selfInfo->y))).y) == THUAI6::PlaceType::Land)
-                api.MoveUp(30);
-            else if (api.GetPlaceType(SquareToCell(GridToSquare(XYGrid(selfInfo->x, selfInfo->y))).x, SquareToCell(GridToSquare(XYGrid(selfInfo->x, selfInfo->y))).y + 1) == THUAI6::PlaceType::Land)
-                api.MoveRight(30);
-            else if (api.GetPlaceType(SquareToCell(GridToSquare(XYGrid(selfInfo->x, selfInfo->y))).x + 1, SquareToCell(GridToSquare(XYGrid(selfInfo->x, selfInfo->y))).y) == THUAI6::PlaceType::Land)
-                api.MoveDown(30);
-            else if (api.GetPlaceType(SquareToCell(GridToSquare(XYGrid(selfInfo->x, selfInfo->y))).x, SquareToCell(GridToSquare(XYGrid(selfInfo->x, selfInfo->y))).y - 1) == THUAI6::PlaceType::Land)
-                api.MoveLeft(30);
+            ret = BGM.GradientAim();
         }
+    }
+    else
+        ret = BGM.GradientAim();
+    return ret;
+}
+
+void Idle(ITrickerAPI& api)
+{
+    if (IdleAim == XYSquare(-1, -1))  // Initialization
+    {
+        IdleAim = FindClassroom();
+        Move(api, FindMoveNext(IdleAim));
+        TrickerIdlePhase = 1;
+    }
+    else if (api.GetGateProgress(GateCell[0].x, GateCell[0].y) > 0)
+    {
+        IdleAim = FindGate();
+        printf("Gate %d %d\n", IdleAim.x, IdleAim.y);
+        if (IdleAim.x > 0)
+        {
+            Move(api, FindMoveNext(IdleAim));
+        }
+    }
+    else
+    {
+        if (TrickerIdlePhase == -1)  // This phase confirms the direction if bgm is decreasing
+        {
+            BGM.UpdateBGM(selfInfoTricker->trickDesire, selfInfoTricker->classVolume);
+            XYSquare IdleAim1 = SeekInvisibleStudent(api);
+            if (IdleAim1.x > 0)
+            {
+                api.Print("Idle1 called.");
+                printf("IdleAim = %d, %d\n", IdleAim1.x, IdleAim1.y);
+                Move(api, FindMoveNext(IdleAim1));
+                IdleAim = IdleAim1;
+            }
+            else
+            {
+                IdleAim = FindClassroom();
+                Move(api, FindMoveNext(IdleAim));
+            }
+            TrickerIdlePhase = 1;
+        }
+        else if (TrickerIdlePhase == 8)  // Approaching end of a period
+        {
+            BGM.UpdateBGM(selfInfoTricker->trickDesire, selfInfoTricker->classVolume);  // Update
+            Move(api, FindMoveNext(IdleAim));
+        }
+        else if (TrickerIdlePhase == 9)  // At the end of a period
+        {
+            BGM.UpdateBGM(selfInfoTricker->trickDesire, selfInfoTricker->classVolume);
+            if (BGM.Decreasing())
+            {
+                bool moveable = true;
+                if (api.GetPlaceType(SquareToCell(GridToSquare(XYGrid(selfInfo->x, selfInfo->y))).x, SquareToCell(GridToSquare(XYGrid(selfInfo->x, selfInfo->y))).y + 1) == THUAI6::PlaceType::Land)
+                    api.MoveRight(30);
+                else if (api.GetPlaceType(SquareToCell(GridToSquare(XYGrid(selfInfo->x, selfInfo->y))).x + 1, SquareToCell(GridToSquare(XYGrid(selfInfo->x, selfInfo->y))).y) == THUAI6::PlaceType::Land)
+                    api.MoveDown(30);
+                else if (api.GetPlaceType(SquareToCell(GridToSquare(XYGrid(selfInfo->x, selfInfo->y))).x, SquareToCell(GridToSquare(XYGrid(selfInfo->x, selfInfo->y))).y - 1) == THUAI6::PlaceType::Land)
+                    api.MoveLeft(30);
+                else if (api.GetPlaceType(SquareToCell(GridToSquare(XYGrid(selfInfo->x, selfInfo->y))).x - 1, SquareToCell(GridToSquare(XYGrid(selfInfo->x, selfInfo->y))).y) == THUAI6::PlaceType::Land)
+                    api.MoveUp(30);
+                else
+                    moveable = false;
+                if (moveable)
+                    TrickerIdlePhase = -1;
+                else
+                    TrickerIdlePhase = 0;
+            }
+            else
+            {
+                Move(api, FindMoveNext(IdleAim));
+                TrickerIdlePhase = 0;
+            }
+        }
+        else  // Within a period
+        {
+            if (IdleAim.x > 0)
+            {
+                Move(api, FindMoveNext(IdleAim));
+            }
+            TrickerIdlePhase = (TrickerIdlePhase + 1) % 10;
+        }
+        ////XYCell a = FindActualClassroom(api); api.Print("1201\n"); printf("Classroom %d %d\n", a.x, a.y);
+        ////if (a.x > 0)
+        ////{
+        ////    api.Print("1203\n");
+        ////    if (api.GetClassroomProgress(a.x, a.y) > 0)
+        ////    {
+        ////        api.Attack(atan2(CellToGrid(a).y - selfInfo->y, CellToGrid(a).x - selfInfo->x)); api.Print("1206\n");
+        ////    }//Attack classroom
+        // XYSquare b = FindClassroom();
+        // if (b.x > 0)
+        //{
+        //     Move(api, FindMoveNext(b)); api.Print("1204\n");
+        // }
+        ////}
     }
     return;
 }
@@ -1369,20 +1571,17 @@ void AI::play(ITrickerAPI& api)
                     api.Print("1306\n");
                     if (TryToAttack(api, maxstudent))  // Try to attack maxstudent
                         TrickerStatus = 4;             // Become dizzy no matter successful or not
-                    else                               // Unable to attack
+                    // if (Trickers_Students[maxstudent].GetFValue() > MeaningfulValue1)
+                    //{
+                    //     // Try using prop AddSpeed
+                    // }
+                    XYSquare toStudentSquare = FindStudentSquare(maxstudent);
+                    if (toStudentSquare.x > 0)
                     {
-                        // if (Trickers_Students[maxstudent].GetFValue() > MeaningfulValue1)
-                        //{
-                        //     // Try using prop AddSpeed
-                        // }
-                        XYSquare toStudentSquare = FindStudentSquare(maxstudent);
-                        if (toStudentSquare.x > 0)
-                        {
-                            Move(api, FindMoveNext(toStudentSquare));
-                            api.Print("1318\n");
-                        }
-                        TrickerStatus = 1;
+                        Move(api, FindMoveNext(toStudentSquare));
+                        api.Print("1318\n");
                     }
+                    TrickerStatus = 1;
                 }
             }
             else  // Student not found
