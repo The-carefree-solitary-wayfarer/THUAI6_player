@@ -254,7 +254,29 @@ inline void BGM_Utilize::GetField(bool row, double ret[2]) const
 
 double SeekDir(double dir1, double dir2, double grad1, double grad2)
 {
-    return 0;
+    double PI = acos(-1.0);
+    double a = dir2 - dir1;
+    double x = -grad1 + grad2 * cos(a);
+    double y = grad2 * sin(a);
+    double k = tan(a + PI / 2);
+    double b, r;
+    b = y + k * (0 - x);
+    if (grad1 == 0)
+    {
+        if (b > 0)
+        {
+            r = PI / 2;
+        }
+        else
+        {
+            r = -PI / 2;
+        }
+    }
+    else
+    {
+        r = atan2(b, grad1);
+    }
+    return (r + dir1);
 }
 
 XYSquare BGM_Utilize::GradientAim() const
@@ -680,19 +702,27 @@ void Move(IAPI& api, XYSquare toMove)
     }
     int x = SquareToGrid(toMove).x;
     int y = SquareToGrid(toMove).y;
+    api.Print("AboutToMove\n");
     api.Move(60, atan2(y - selfInfo->y, x - selfInfo->x));
+    api.Print("Moved\n");
 }
 
 XYSquare FindMoveNext(XYSquare toMove)
 {
     // printf("%d %d MoveNext\n", toMove.x, toMove.y);
     int x = toMove.x, y = toMove.y, lx = toMove.x, ly = toMove.x;
+    if (x <= 0 || y <= 0)
+    {
+        printf("Erroneous pos at 714\n");
+        return selfSquare;
+    }
     while (x != selfSquare.x || y != selfSquare.y)
     {
         lx = x;
         ly = y;
         x = fromMap[lx][ly].x;
         y = fromMap[lx][ly].y;
+        printf("MoveNextFound\n");
         if (x == lx && y == ly && (x != selfSquare.x || y != selfSquare.y))
         {
             printf("x= %d, y = %d, lx = %d, ly = %d\n", x, y, lx, ly);
@@ -1206,6 +1236,8 @@ XYSquare FindGuardSquare(ITrickerAPI& api, short guard, short target)  // Find s
     if (dist(arr) > 5 * Trickers_Students[guard].radius * 3)  // Able to intercept
     {
         XYCell aim(SquareToCell(GridToSquare(XYGrid((int)(round(Trickers_Students[guard].GetLatestCooridinates().x + Trickers_Students[guard].radius * 3 * cos(theta))), int(round(Trickers_Students[guard].GetLatestCooridinates().y + Trickers_Students[guard].radius * 6 * sin(theta)))))));
+        if (aim.x <= 0)
+            return XYSquare(-1, -1);
         THUAI6::PlaceType aimed = oriMap[aim.x][aim.y];
         api.Print("1055\n");
         while (aimed != THUAI6::PlaceType::Grass && aimed != THUAI6::PlaceType::Land && aimed != THUAI6::PlaceType::HiddenGate)  // Out of reach
@@ -1368,6 +1400,7 @@ XYSquare SeekInvisibleStudent(ITrickerAPI& api)
         if (abs(grads[0]) < 0.02 && abs(grads[1]) < 0.02)  // Still no change
         {
             XYGrid aiming(2 * selfInfo->x - 25000, 2 * selfInfo->y - 25000);
+            api.Print("Seekinvisiblestudent->nochange");
             double asylum = atan2(aiming.y - selfInfo->y, aiming.x - selfInfo->x);  // Direction of Cross-Diagonals
             while ((aiming.x < 1000 || aiming.x >= 49000 || aiming.y < 1000 || aiming.y >= 49000) ||
                    (oriMap[SquareToCell(GridToSquare(aiming)).x][SquareToCell(GridToSquare(aiming)).y] != THUAI6::PlaceType::Grass && oriMap[SquareToCell(GridToSquare(aiming)).x][SquareToCell(GridToSquare(aiming)).y] != THUAI6::PlaceType::Land))
@@ -1384,14 +1417,38 @@ XYSquare SeekInvisibleStudent(ITrickerAPI& api)
     }
     else
         ret = BGM.GradientAim();
+    api.Print("Seekinvisiblestudent->GradientAim");
     return ret;
 }
 
 void Idle(ITrickerAPI& api)
 {
-    if (IdleAim == XYSquare(-1, -1))  // Initialization
+    if (selfInfo->playerState != THUAI6::PlayerState::Idle)
+    {
+        Move(api, FindMoveNext(IdleAim));
+        TrickerIdlePhase = 1;
+    }
+    else if (IdleAim == XYSquare(-1, -1))  // Initialization
     {
         IdleAim = FindClassroom();
+        if (dist(XYGrid(SquareToGrid(IdleAim).x - selfInfo->x, SquareToGrid(IdleAim).y - selfInfo->y)) < 1000)
+        {
+            XYSquare IdleAim1 = SeekInvisibleStudent(api);
+            if (IdleAim1.x > 0)
+            {
+                api.Print("Idle0 called.");
+                printf("IdleAim = %d, %d\n", IdleAim1.x, IdleAim1.y);
+                Move(api, FindMoveNext(IdleAim1));
+                IdleAim = IdleAim1;
+            }
+            else
+            {
+                IdleAim = FindClassroom();
+                api.Print("FindClassroomCalled.\n");
+                Move(api, FindMoveNext(IdleAim));
+            }
+            TrickerIdlePhase = 1;
+        }
         Move(api, FindMoveNext(IdleAim));
         TrickerIdlePhase = 1;
     }
@@ -1420,6 +1477,7 @@ void Idle(ITrickerAPI& api)
             else
             {
                 IdleAim = FindClassroom();
+                api.Print("FindClassroomCalled.\n");
                 Move(api, FindMoveNext(IdleAim));
             }
             TrickerIdlePhase = 1;
@@ -1435,14 +1493,16 @@ void Idle(ITrickerAPI& api)
             if (BGM.Decreasing())
             {
                 bool moveable = true;
-                if (api.GetPlaceType(SquareToCell(GridToSquare(XYGrid(selfInfo->x, selfInfo->y))).x, SquareToCell(GridToSquare(XYGrid(selfInfo->x, selfInfo->y))).y + 1) == THUAI6::PlaceType::Land)
-                    api.MoveRight(30);
+                if (abs(selfInfo->facingDirection) < 0.02 || abs(selfInfo->facingDirection) > 3.123)
+                    TrickerIdlePhase = 0;
+                else if (api.GetPlaceType(SquareToCell(GridToSquare(XYGrid(selfInfo->x, selfInfo->y))).x, SquareToCell(GridToSquare(XYGrid(selfInfo->x, selfInfo->y))).y + 1) == THUAI6::PlaceType::Land)
+                    api.MoveRight(50);
                 else if (api.GetPlaceType(SquareToCell(GridToSquare(XYGrid(selfInfo->x, selfInfo->y))).x + 1, SquareToCell(GridToSquare(XYGrid(selfInfo->x, selfInfo->y))).y) == THUAI6::PlaceType::Land)
-                    api.MoveDown(30);
+                    api.MoveDown(50);
                 else if (api.GetPlaceType(SquareToCell(GridToSquare(XYGrid(selfInfo->x, selfInfo->y))).x, SquareToCell(GridToSquare(XYGrid(selfInfo->x, selfInfo->y))).y - 1) == THUAI6::PlaceType::Land)
-                    api.MoveLeft(30);
+                    api.MoveLeft(50);
                 else if (api.GetPlaceType(SquareToCell(GridToSquare(XYGrid(selfInfo->x, selfInfo->y))).x - 1, SquareToCell(GridToSquare(XYGrid(selfInfo->x, selfInfo->y))).y) == THUAI6::PlaceType::Land)
-                    api.MoveUp(30);
+                    api.MoveUp(50);
                 else
                     moveable = false;
                 if (moveable)
@@ -1520,13 +1580,16 @@ void AI::play(ITrickerAPI& api)
                 {
                     XYSquare toGuardSquare = FindGuardSquare(api, fixation, approachingStudent);
                     api.Print("1266\n");
-                    if (toGuardSquare.x > 0 && (toGuardSquare.x != selfInfo->x || toGuardSquare.y != selfInfo->y))  // Not already in it
+                    if (toGuardSquare.x > 0 && toGuardSquare.y > 0 && (toGuardSquare.x != selfInfo->x || toGuardSquare.y != selfInfo->y))  // Not already in it
                     {
                         Move(api, FindMoveNext(toGuardSquare));
+                        api.Print("Guard pos found\n");
                     }
+                    else
+                        api.Print("Guard pos not found\n");
                 }
             }
-            if (Trickers_Students[fixation].addiction > (long long)(0.99 * getMaxAddiction(fixation)))  // End sitting vigil
+            if (Trickers_Students[fixation].addiction > (long long)(0.12 * getMaxAddiction(fixation)))  // End sitting vigil
             {
                 TrickerStatus = 0;
                 api.Print("1275\n");
@@ -1589,7 +1652,7 @@ void AI::play(ITrickerAPI& api)
                 api.Print("1325\n");
                 if (fixation >= 0)  // Existent in last run, target lost
                 {
-                    if (api.GetFrameCount() - Trickers_Students[fixation].lastframe > 300)  // Too long! give up for lost
+                    if (api.GetFrameCount() - Trickers_Students[fixation].lastframe > 600)  // Too long! give up for lost
                     {
                         Trickers_Students[fixation].isFixed = false;
                         fixation = -1;
@@ -1600,12 +1663,16 @@ void AI::play(ITrickerAPI& api)
                     //{
                     //     // Try using prop clairaudience
                     // }
-                    XYSquare toDisappearSquare = SeekDisappearSquare(api, fixation);
-                    if (toDisappearSquare.x > 0)
-                    {
-                        Move(api, FindMoveNext(toDisappearSquare));
-                        api.Print("1341\n");
-                    }
+                    // XYSquare toDisappearSquare = SeekDisappearSquare(api, fixation);
+                    // if (toDisappearSquare.x > 0)
+                    //{
+                    //    Move(api, FindMoveNext(toDisappearSquare)); api.Print("1341\n");
+                    //}
+                    TrickerIdlePhase = -1;
+                    TrickerStatus = 0;
+                    api.Print("Student lost\n");
+                    fixation = -1;
+                    Idle(api);
                 }
             }
         }
@@ -1613,6 +1680,7 @@ void AI::play(ITrickerAPI& api)
         if (!TrickerStatus)
         {
             api.Print("1345\n");
+            fixation = -1;
             Idle(api);
         }
     }
