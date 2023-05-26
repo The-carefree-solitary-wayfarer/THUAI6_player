@@ -1453,7 +1453,7 @@ XYSquare SeekInvisibleStudent(ITrickerAPI& api)
             XYGrid aiming(2 * selfInfo->x - 25000, 2 * selfInfo->y - 25000);
             api.Print("Seekinvisiblestudent->nochange");
             double asylum = atan2(aiming.y - selfInfo->y, aiming.x - selfInfo->x);  // Direction of Cross-Diagonals
-            while ((aiming.x < 1000 || aiming.x >= 49000 || aiming.y < 1000 || aiming.y >= 49000) ||
+            while (!(aiming.x < 1000 || aiming.x >= 49000 || aiming.y < 1000 || aiming.y >= 49000) &&
                    (oriMap[SquareToCell(GridToSquare(aiming)).x][SquareToCell(GridToSquare(aiming)).y] != THUAI6::PlaceType::Grass && oriMap[SquareToCell(GridToSquare(aiming)).x][SquareToCell(GridToSquare(aiming)).y] != THUAI6::PlaceType::Land))
             {
                 aiming.x += (int)(round(1000 * cos(asylum)));
@@ -1468,8 +1468,10 @@ XYSquare SeekInvisibleStudent(ITrickerAPI& api)
         }
     }
     else
+    {
         ret = BGM.GradientAim();
-    api.Print("Seekinvisiblestudent->GradientAim");
+        api.Print("Seekinvisiblestudent->GradientAim");
+    }
     return ret;
 }
 
@@ -1518,8 +1520,13 @@ void Idle(ITrickerAPI& api)
             {
                 api.Print("Idle0 called.");
                 printf("IdleAim = %d, %d\n", IdleAim1.x, IdleAim1.y);
-                Move(api, FindMoveNext(IdleAim1));
-                IdleAim = IdleAim1;
+                if (IdleAim1.x > 0)
+                {
+                    Move(api, FindMoveNext(IdleAim1));
+                    IdleAim = IdleAim1;
+                }
+                else
+                    Move(api, FindMoveNext(IdleAim));
             }
             else
             {
@@ -1546,6 +1553,7 @@ void Idle(ITrickerAPI& api)
     {
         if (TrickerIdlePhase == -1)  // This phase confirms the direction if bgm is decreasing
         {
+            bool moved = false;
             BGM.UpdateBGM(selfInfoTricker->trickDesire, selfInfoTricker->classVolume);
             api.Print("Idlephase=-1");
             XYSquare IdleAim1 = SeekInvisibleStudent(api);
@@ -1554,16 +1562,27 @@ void Idle(ITrickerAPI& api)
             {
                 api.Print("Idle1 called.");
                 printf("IdleAim = %d, %d\n", IdleAim1.x, IdleAim1.y);
-                Move(api, FindMoveNext(IdleAim1));
-                IdleAim = IdleAim1;
+                if (IdleAim1.x > 0)
+                {
+                    Move(api, FindMoveNext(IdleAim1));
+                    IdleAim = IdleAim1;
+                }
+                else
+                    Move(api, FindMoveNext(IdleAim));
+                moved = true;
             }
             else
             {
                 IdleAim = FindClassroom();
                 api.Print("FindClassroomCalled.\n");
-                Move(api, FindMoveNext(IdleAim));
+                if (IdleAim.x > 0)
+                {
+                    Move(api, FindMoveNext(IdleAim));
+                    moved = true;
+                }
             }
-            TrickerIdlePhase = 1;
+            if (moved)
+                TrickerIdlePhase = 1;
         }
         else if (TrickerIdlePhase == 8)  // Approaching end of a period
         {
