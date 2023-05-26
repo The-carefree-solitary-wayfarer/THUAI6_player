@@ -299,7 +299,7 @@ XYSquare BGM_Utilize::GradientAim() const
     double asylum = SeekDir(dirs[0], dirs[1], grads[0], grads[1]);  // Direction of ascending BGM
     printf("asylum Found\n");
     XYGrid aiming((int)(selfInfoTricker->x + 20000 / bgm[1][2] * cos(asylum)), (int)(selfInfoTricker->y + 20000 / bgm[1][2] * sin(asylum)));
-    while ((aiming.x < 1000 || aiming.x >= 49000 || aiming.y < 1000 || aiming.y >= 49000) ||
+    while ((aiming.x >= 1000 && aiming.x < 49000 && aiming.y >= 1000 && aiming.y < 49000) &&
            (oriMap[SquareToCell(GridToSquare(aiming)).x][SquareToCell(GridToSquare(aiming)).y] != THUAI6::PlaceType::Grass && oriMap[SquareToCell(GridToSquare(aiming)).x][SquareToCell(GridToSquare(aiming)).y] != THUAI6::PlaceType::Land))
     {
         if (shrink)
@@ -316,7 +316,7 @@ XYSquare BGM_Utilize::GradientAim() const
         }
         else
         {
-            while ((aiming.x < 1000 || aiming.x >= 49000 || aiming.y < 1000 || aiming.y >= 49000) ||
+            while ((aiming.x >= 1000 && aiming.x < 49000 && aiming.y >= 1000 && aiming.y < 49000) &&
                    (oriMap[SquareToCell(GridToSquare(aiming)).x][SquareToCell(GridToSquare(aiming)).y] != THUAI6::PlaceType::Grass && oriMap[SquareToCell(GridToSquare(aiming)).x][SquareToCell(GridToSquare(aiming)).y] != THUAI6::PlaceType::Land))
             {
                 aiming.x += (int)(round(1000 * cos(asylum)));
@@ -599,6 +599,15 @@ void drawMap(const ITrickerAPI& api)
             }
         }
     }
+    auto tl = api.GetStudents();
+    for (int n = 0; n < tl.size(); ++n)
+        if (Trickers_Students[tl[n]->playerID].addiction > 0 || Trickers_Students[tl[n]->playerID].career == THUAI6::StudentType::Teacher)
+        {
+            int tx = numGridToSquare(tl[n]->x), ty = numGridToSquare(tl[n]->y);
+            for (int i = max(tx - 10, 5); i < min(tx + 10, 496); ++i)
+                for (int j = max(ty - 10, 5); j < min(ty + 10, 496); ++j)
+                    untilTimeMap[i][j] = -1;
+        }
 }
 
 void drawMap(const IStudentAPI& api)
@@ -1473,14 +1482,35 @@ void Idle(ITrickerAPI& api)
         IdleAim = XYSquare(-1, -1);
         api.Print("ReInit requested\n");
     }
+    else if (dist(XYGrid(SquareToGrid(IdleAim).x - selfInfo->x, SquareToGrid(IdleAim).y - selfInfo->y)) < 1000)
+    {
+        XYSquare IdleAim1 = SeekInvisibleStudent(api);
+        if (IdleAim1.x > 0)
+        {
+            api.Print("Idle0 called.");
+            printf("IdleAim = %d, %d\n", IdleAim1.x, IdleAim1.y);
+            Move(api, FindMoveNext(IdleAim1));
+            IdleAim = IdleAim1;
+        }
+        else
+        {
+            IdleAim = FindClassroom();
+            api.Print("FindClassroomCalled.\n");
+            Move(api, FindMoveNext(IdleAim));
+        }
+        TrickerIdlePhase = 1;
+    }
+    else
+        IdleAim = GridToSquare(CellToGrid(SquareToCell(IdleAim)));
     if (selfInfo->playerState != THUAI6::PlayerState::Idle)
     {
-        Move(api, FindMoveNext(IdleAim));
+        api.Print("IdleQuit\n");
         TrickerIdlePhase = 1;
     }
     else if (IdleAim == XYSquare(-1, -1))  // Initialization
     {
         IdleAim = FindClassroom();
+        api.Print("TryToInit\n");
         if (dist(XYGrid(SquareToGrid(IdleAim).x - selfInfo->x, SquareToGrid(IdleAim).y - selfInfo->y)) < 1000)
         {
             XYSquare IdleAim1 = SeekInvisibleStudent(api);
@@ -1629,7 +1659,7 @@ void AI::play(ITrickerAPI& api)
         {
             XYCell vec = XYCell(SquareToCell(GridToSquare(XYGrid(selfInfo->x, selfInfo->y))).x - SquareToCell(GridToSquare(Trickers_Students[fixation].GetLatestCooridinates())).x, SquareToCell(GridToSquare(XYGrid(selfInfo->x, selfInfo->y))).y - SquareToCell(GridToSquare(Trickers_Students[fixation].GetLatestCooridinates())).y);  // Cell distance from self to addicted
             if (abs(vec.x) > 1 || abs(vec.y) > 1)
-                Move(api, FindMoveNext(GridToSquare(Trickers_Students[fixation].GetLatestCooridinates())));
+                Move(api, FindMoveNext(GridToSquare(CellToGrid(SquareToCell(GridToSquare(Trickers_Students[fixation].GetLatestCooridinates()))))));
             short approachingStudent = FindNextMaxStudent(api, fixation);
             api.Print("1259\n");
             if (approachingStudent >= 0 && Trickers_Students[approachingStudent].addiction > 0)
